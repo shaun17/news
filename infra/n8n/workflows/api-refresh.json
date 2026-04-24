@@ -1,0 +1,54 @@
+{
+  "id": "c9d0e1f2-a3b4-5678-cdef-199999999999",
+  "name": "api-refresh",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "refresh",
+        "options": {},
+        "responseMode": "lastNode"
+      },
+      "id": "9c9d0e1f-2a3b-4567-8901-abcdef000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "d0000000-0000-0000-0000-000000000004"
+    },
+    {
+      "parameters": {
+        "workflowId": "d4e5f6a7-b8c9-0123-defa-144444444444",
+        "options": {}
+      },
+      "id": "9c9d0e1f-2a3b-4567-8901-abcdef000002",
+      "name": "Trigger Ingest",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { triggered: true, ts: new Date().toISOString() } }}"
+      },
+      "id": "9c9d0e1f-2a3b-4567-8901-abcdef000003",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Trigger Ingest", "type": "main", "index": 0 }, { "node": "Respond", "type": "main", "index": 0 }]]
+    },
+    "Trigger Ingest": {
+      "main": []
+    }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "staticData": null,
+  "tags": [],
+  "active": true
+}
