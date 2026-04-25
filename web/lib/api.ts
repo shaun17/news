@@ -17,6 +17,6 @@ export const n8n = {
     Object.entries(q).forEach(([k, v]) => v != null && u.set(k, String(v)));
     return call<{ items: import('./types').Item[] }>(`/webhook/items?${u}`);
   },
-  topicDetail:   (id: number) => call<{ topic: import('./types').Topic; items: import('./types').Item[] }>(`/webhook/topics/${id}`),
+  topicDetail:   (id: number) => call<{ topic: import('./types').Topic; items: import('./types').Item[] }>(`/webhook/topic-detail?id=${id}`),
   refresh:       () => call<{ triggered: boolean; ts: string }>('/webhook/refresh', { method: 'POST' })
 };

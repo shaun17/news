@@ -7,7 +7,7 @@
         "httpMethod": "GET",
         "path": "items",
         "options": {},
-        "responseMode": "lastNode"
+        "responseMode": "responseNode"
       },
       "id": "7a7b8c9d-0e1f-2345-6789-abcdef000001",
       "name": "Webhook",
@@ -19,12 +19,13 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH params AS (\n  SELECT\n    NULLIF('{{ $json.query.topic || \"\" }}', '')::bigint AS topic,\n    NULLIF('{{ $json.query.source || \"\" }}', '')        AS source,\n    LEAST(GREATEST(({{ $json.query.limit  || 50 }})::int, 1), 200) AS lim,\n    GREATEST(({{ $json.query.offset || 0 }})::int, 0)              AS off\n)\nSELECT i.id, i.source, i.source_id, i.title, i.body, i.post_url, i.link_url,\n       i.author, i.sub_or_handle, i.score, i.comment_count, i.published_at\nFROM items i\nLEFT JOIN item_topics it ON it.item_id = i.id\nCROSS JOIN params p\nWHERE i.is_ai_relevant = TRUE\n  AND (p.topic  IS NULL OR it.topic_id = p.topic)\n  AND (p.source IS NULL OR i.source    = p.source)\nORDER BY i.published_at DESC\nLIMIT (SELECT lim FROM params)\nOFFSET (SELECT off FROM params);"
+        "query": "WITH params AS (\n  SELECT\n    NULLIF('{{ $json.query.topic || \"\" }}', '')::bigint AS topic,\n    NULLIF('{{ $json.query.source || \"\" }}', '')        AS source,\n    LEAST(GREATEST(({{ $json.query.limit  || 50 }})::int, 1), 200) AS lim,\n    GREATEST(({{ $json.query.offset || 0 }})::int, 0)              AS off\n)\nSELECT i.id, i.source, i.source_id, i.title, i.body, i.post_url, i.link_url,\n       i.author, i.sub_or_handle, i.score, i.comment_count, i.published_at\nFROM items i\nLEFT JOIN item_topics it ON it.item_id = i.id\nCROSS JOIN params p\nWHERE i.is_ai_relevant IS NOT FALSE\n  AND (p.topic  IS NULL OR it.topic_id = p.topic)\n  AND (p.source IS NULL OR i.source    = p.source)\nORDER BY i.published_at DESC\nLIMIT (SELECT lim FROM params)\nOFFSET (SELECT off FROM params);"
       },
       "id": "7a7b8c9d-0e1f-2345-6789-abcdef000002",
       "name": "Query Items",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
+      "alwaysOutputData": true,
       "position": [450, 300],
       "credentials": {
         "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
@@ -33,7 +34,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { items: $items().map(x => x.json) } }}"
+        "responseBody": "={{ { items: $input.all().map(x => x.json).filter(x => x && x.id != null) } }}"
       },
       "id": "7a7b8c9d-0e1f-2345-6789-abcdef000003",
       "name": "Respond",

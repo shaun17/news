@@ -7,7 +7,7 @@
         "httpMethod": "POST",
         "path": "refresh",
         "options": {},
-        "responseMode": "lastNode"
+        "responseMode": "responseNode"
       },
       "id": "9c9d0e1f-2a3b-4567-8901-abcdef000001",
       "name": "Webhook",

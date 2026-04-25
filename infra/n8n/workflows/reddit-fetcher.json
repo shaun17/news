@@ -6,7 +6,7 @@
       "parameters": {},
       "id": "22222222-2222-2222-2222-222222222221",
       "name": "Manual Trigger",
-      "type": "n8n-nodes-base.manualTrigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
       "position": [250, 300]
     },
@@ -25,7 +25,8 @@
         "url": "=https://www.reddit.com/r/{{ $json.sub }}/hot.json?limit=25",
         "method": "GET",
         "options": {
-          "continueOnFail": true
+          "continueOnFail": true,
+          "proxy": "http://100.126.75.65:6152"
         },
         "sendHeaders": true,
         "headerParameters": {

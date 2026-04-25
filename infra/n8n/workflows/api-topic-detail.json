@@ -5,9 +5,9 @@
     {
       "parameters": {
         "httpMethod": "GET",
-        "path": "topics/:id",
+        "path": "topic-detail",
         "options": {},
-        "responseMode": "lastNode"
+        "responseMode": "responseNode"
       },
       "id": "8b8c9d0e-1f2a-3456-7890-abcdef000001",
       "name": "Webhook",
@@ -19,7 +19,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, name, summary, key_entities, item_count, source_count, total_score,\n       is_hot, is_rising, first_seen_at, last_active_at\nFROM topics WHERE id = {{ $json.params.id }}::bigint;"
+        "query": "SELECT id, name, summary, key_entities, item_count, source_count, total_score,\n       is_hot, is_rising, first_seen_at, last_active_at\nFROM topics WHERE id = {{ $('Webhook').first().json.query.id }}::bigint;"
       },
       "id": "8b8c9d0e-1f2a-3456-7890-abcdef000002",
       "name": "Query Topic",
@@ -33,12 +33,13 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT i.id, i.source, i.title, i.post_url, i.score, i.published_at\nFROM items i JOIN item_topics it ON it.item_id = i.id\nWHERE it.topic_id = {{ $json.params.id }}::bigint\nORDER BY i.published_at DESC LIMIT 100;"
+        "query": "SELECT i.id, i.source, i.title, i.post_url, i.score, i.published_at\nFROM items i JOIN item_topics it ON it.item_id = i.id\nWHERE it.topic_id = {{ $('Webhook').first().json.query.id }}::bigint\nORDER BY i.published_at DESC LIMIT 100;"
       },
       "id": "8b8c9d0e-1f2a-3456-7890-abcdef000003",
       "name": "Query Items",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
+      "alwaysOutputData": true,
       "position": [650, 300],
       "credentials": {
         "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
@@ -47,7 +48,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { topic: $('Query Topic').first().json, items: $items().map(x => x.json) } }}"
+        "responseBody": "={{ { topic: $('Query Topic').first().json, items: $input.all().map(x => x.json).filter(x => x && x.id != null) } }}"
       },
       "id": "8b8c9d0e-1f2a-3456-7890-abcdef000004",
       "name": "Respond",

@@ -7,7 +7,7 @@
         "httpMethod": "GET",
         "path": "topics",
         "options": {},
-        "responseMode": "lastNode"
+        "responseMode": "responseNode"
       },
       "id": "6f6a7b8c-9d0e-1234-5678-9abcdef00001",
       "name": "Webhook",
@@ -25,6 +25,7 @@
       "name": "Query Topics",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
+      "alwaysOutputData": true,
       "position": [450, 300],
       "credentials": {
         "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
@@ -33,7 +34,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { topics: $items().map(x => x.json) } }}"
+        "responseBody": "={{ { topics: $input.all().map(x => x.json).filter(x => x && x.id != null) } }}"
       },
       "id": "6f6a7b8c-9d0e-1234-5678-9abcdef00003",
       "name": "Respond",

@@ -6,7 +6,7 @@
       "parameters": {},
       "id": "11111111-1111-1111-1111-111111111111",
       "name": "Manual Trigger",
-      "type": "n8n-nodes-base.manualTrigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
       "position": [250, 300]
     },
@@ -14,7 +14,9 @@
       "parameters": {
         "url": "https://hacker-news.firebaseio.com/v0/topstories.json",
         "method": "GET",
-        "options": {}
+        "options": {
+          "proxy": "http://100.126.75.65:6152"
+        }
       },
       "id": "11111111-1111-1111-1111-111111111112",
       "name": "Get Top Story IDs",
@@ -24,7 +26,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const ids = $input.first().json;\nreturn ids.slice(0, 30).map(id => ({ json: { id } }));"
+        "jsCode": "const raw = $input.all().map(x => x.json);\nconst ids = raw.length === 1 && Array.isArray(raw[0]) ? raw[0] : raw;\nreturn ids.slice(0, 30).map(id => ({ json: { id } }));"
       },
       "id": "11111111-1111-1111-1111-111111111113",
       "name": "Take 30",
@@ -37,7 +39,8 @@
         "url": "=https://hacker-news.firebaseio.com/v0/item/{{ $json.id }}.json",
         "method": "GET",
         "options": {
-          "continueOnFail": true
+          "continueOnFail": true,
+          "proxy": "http://100.126.75.65:6152"
         }
       },
       "id": "11111111-1111-1111-1111-111111111114",

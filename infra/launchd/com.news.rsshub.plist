@@ -16,6 +16,7 @@
     <key>PORT</key><string>1200</string>
     <key>NODE_OPTIONS</key><string>--max-http-header-size=32768</string>
     <key>TWITTER_AUTH_TOKEN</key><string>33e95722471bb7da38c978f1d4cdfee6eff4a099</string>
+    <key>PROXY_URI</key><string>http://100.126.75.65:6152</string>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string>
   </dict>
   <key>RunAtLoad</key><true/>
