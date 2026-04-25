@@ -26,7 +26,7 @@
         "method": "GET",
         "options": {
           "continueOnFail": true,
-          "proxy": "http://100.126.75.65:6152"
+          "proxy": "${MBP_PROXY}"
         },
         "sendHeaders": true,
         "headerParameters": {

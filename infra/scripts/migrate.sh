@@ -3,12 +3,11 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-[ -f "$PROJECT_DIR/.env" ] && source "$PROJECT_DIR/.env"
-REMOTE_USER="${REMOTE_USER:-coco}"
-REMOTE_HOST="${REMOTE_HOST:-100.104.136.117}"
-REMOTE_DIR="${REMOTE_DIR:-/Users/coco/code/news}"
-DBNAME="${PGDATABASE:-news}"
-DBUSER="${PGUSER:-coco}"
+[ -f "$PROJECT_DIR/.env" ] || { echo "missing .env" >&2; exit 1; }
+set -a; source "$PROJECT_DIR/.env"; set +a
+: "${REMOTE_USER:?}"; : "${REMOTE_HOST:?}"; : "${REMOTE_DIR:?}"
+DBNAME="${PGDATABASE:?}"
+DBUSER="${PGUSER:?}"
 
 ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_DIR/infra/postgres/migrations"
 rsync -az --delete "$PROJECT_DIR/infra/postgres/migrations/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/infra/postgres/migrations/"

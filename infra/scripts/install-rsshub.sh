@@ -3,9 +3,9 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-[ -f "$PROJECT_DIR/.env" ] && source "$PROJECT_DIR/.env"
-REMOTE_USER="${REMOTE_USER:-coco}"
-REMOTE_HOST="${REMOTE_HOST:-100.104.136.117}"
+[ -f "$PROJECT_DIR/.env" ] || { echo "missing .env" >&2; exit 1; }
+set -a; source "$PROJECT_DIR/.env"; set +a
+: "${REMOTE_USER:?}"; : "${REMOTE_HOST:?}"
 
 bash "$SCRIPT_DIR/ssh.sh" '
   set -e

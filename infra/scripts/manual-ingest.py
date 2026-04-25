@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import psycopg
 
-PROXY = os.environ.get("PROXY", "http://100.126.75.65:6152")
+PROXY = os.environ["PROXY"]
 RSSHUB = os.environ.get("RSSHUB", "http://127.0.0.1:1200")
 PG = {"dbname":"news","user":"coco"}
 UA = "news-aggregator/0.1 by wenren"

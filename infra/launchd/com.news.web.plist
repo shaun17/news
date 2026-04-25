@@ -6,20 +6,20 @@
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>/Users/coco/code/news/web/node_modules/.bin/next</string>
+    <string>${REMOTE_DIR}/web/node_modules/.bin/next</string>
     <string>start</string>
   </array>
-  <key>WorkingDirectory</key><string>/Users/coco/code/news/web</string>
+  <key>WorkingDirectory</key><string>${REMOTE_DIR}/web</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>NODE_ENV</key><string>production</string>
-    <key>N8N_WEBHOOK_BASE</key><string>http://127.0.0.1:5678</string>
-    <key>PORT</key><string>3000</string>
+    <key>N8N_WEBHOOK_BASE</key><string>${N8N_WEBHOOK_BASE}</string>
+    <key>PORT</key><string>${WEB_PORT}</string>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/Users/coco/Library/Logs/news-web.log</string>
-  <key>StandardErrorPath</key><string>/Users/coco/Library/Logs/news-web.log</string>
+  <key>StandardOutPath</key><string>${REMOTE_USER_HOME}/Library/Logs/news-web.log</string>
+  <key>StandardErrorPath</key><string>${REMOTE_USER_HOME}/Library/Logs/news-web.log</string>
 </dict>
 </plist>

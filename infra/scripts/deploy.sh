@@ -3,10 +3,9 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-[ -f "$PROJECT_DIR/.env" ] && source "$PROJECT_DIR/.env"
-REMOTE_USER="${REMOTE_USER:-coco}"
-REMOTE_HOST="${REMOTE_HOST:-100.104.136.117}"
-REMOTE_DIR="${REMOTE_DIR:-/Users/coco/code/news}"
+[ -f "$PROJECT_DIR/.env" ] || { echo "missing .env (copy from .env.example)" >&2; exit 1; }
+set -a; source "$PROJECT_DIR/.env"; set +a
+: "${REMOTE_USER:?}"; : "${REMOTE_HOST:?}"; : "${REMOTE_DIR:?}"; : "${WEB_PORT:?}"
 
 echo "=== Step 1: rsync project to remote ==="
 ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_DIR"
@@ -25,21 +24,21 @@ bash "$SCRIPT_DIR/migrate.sh"
 echo "=== Step 3: Build web frontend ==="
 bash "$SCRIPT_DIR/ssh.sh" "cd $REMOTE_DIR/web && npm install --legacy-peer-deps && npm run build"
 
-echo "=== Step 4: Import n8n workflows ==="
+echo "=== Step 4: Render + import n8n workflows (envsubst from .env) ==="
+TMP=$(mktemp -d); trap "rm -rf $TMP" EXIT
+mkdir -p "$TMP/workflows"
+for f in "$PROJECT_DIR"/infra/n8n/workflows/*.json; do
+  envsubst < "$f" > "$TMP/workflows/$(basename "$f")"
+done
+ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "rm -rf /tmp/news-workflows && mkdir -p /tmp/news-workflows"
+rsync -az "$TMP/workflows/" "$REMOTE_USER@$REMOTE_HOST:/tmp/news-workflows/"
 bash "$SCRIPT_DIR/ssh.sh" "
-  cd $REMOTE_DIR
-  for f in infra/n8n/workflows/*.json; do
-    [ \"\$f\" = 'infra/n8n/workflows/.gitkeep' ] && continue
-    echo \"Importing \$f...\" && n8n import:workflow --input=\"\$f\" 2>&1 | head -1
+  for f in /tmp/news-workflows/*.json; do
+    echo \"Importing \$(basename \$f)...\" && n8n import:workflow --input=\"\$f\" 2>&1 | tail -1
   done
 "
 
-echo "=== Step 5: Deploy launchd plists ==="
-bash "$SCRIPT_DIR/ssh.sh" "
-  cp $REMOTE_DIR/infra/launchd/com.news.web.plist ~/Library/LaunchAgents/
-  launchctl unload ~/Library/LaunchAgents/com.news.web.plist 2>/dev/null || true
-  launchctl load -w ~/Library/LaunchAgents/com.news.web.plist
-  echo 'Web launchd loaded.'
-"
+echo "=== Step 5: Deploy launchd plists (renders templates from .env) ==="
+bash "$SCRIPT_DIR/deploy-launchd.sh"
 
-echo "=== Done! Open http://100.104.136.117:3000 ==="
+echo "=== Done! Open http://${REMOTE_HOST}:${WEB_PORT} ==="

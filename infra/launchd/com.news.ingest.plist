@@ -6,18 +6,18 @@
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/python3</string>
-    <string>/Users/coco/code/news/infra/scripts/manual-ingest.py</string>
+    <string>${REMOTE_DIR}/infra/scripts/manual-ingest.py</string>
   </array>
-  <key>WorkingDirectory</key><string>/Users/coco/code/news</string>
+  <key>WorkingDirectory</key><string>${REMOTE_DIR}</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>PROXY</key><string>http://100.126.75.65:6152</string>
-    <key>RSSHUB</key><string>http://127.0.0.1:1200</string>
+    <key>PROXY</key><string>${MBP_PROXY}</string>
+    <key>RSSHUB</key><string>http://127.0.0.1:${RSSHUB_PORT}</string>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string>
   </dict>
   <key>StartInterval</key><integer>1800</integer>
   <key>RunAtLoad</key><true/>
-  <key>StandardOutPath</key><string>/Users/coco/Library/Logs/news-ingest.log</string>
-  <key>StandardErrorPath</key><string>/Users/coco/Library/Logs/news-ingest.log</string>
+  <key>StandardOutPath</key><string>${REMOTE_USER_HOME}/Library/Logs/news-ingest.log</string>
+  <key>StandardErrorPath</key><string>${REMOTE_USER_HOME}/Library/Logs/news-ingest.log</string>
 </dict>
 </plist>
