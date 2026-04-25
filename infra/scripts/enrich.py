@@ -15,7 +15,20 @@ import psycopg
 API_KEY = os.environ["MOONSHOT_API_KEY"]
 API_URL = os.environ.get("MOONSHOT_API_URL", "https://api.moonshot.cn/v1/chat/completions")
 MODEL   = os.environ.get("MOONSHOT_MODEL", "kimi-k2-0905-preview")
-PG = {"dbname":"news", "user":"coco"}
+
+def pg_config():
+    """从环境变量读取 Postgres 连接参数，避免在源码里写死部署账号和主机。"""
+    return {
+        key: value
+        for key, value in {
+            "dbname": os.environ.get("PGDATABASE"),
+            "user": os.environ.get("PGUSER"),
+            "host": os.environ.get("PGHOST"),
+            "port": os.environ.get("PGPORT"),
+            "password": os.environ.get("PGPASSWORD"),
+        }.items()
+        if value
+    }
 
 CLASSIFY_BATCH = 30   # HN items per relevance call
 ENTITY_BATCH   = 20   # items per entity-extract call
@@ -282,7 +295,7 @@ def refresh_topic_stats(con):
     con.commit()
 
 def main():
-    with psycopg.connect(**PG, autocommit=False) as con:
+    with psycopg.connect(**pg_config(), autocommit=False) as con:
         cur = con.cursor()
         # Pull items needing relevance/entities work, prioritize unprocessed first
         cur.execute("""

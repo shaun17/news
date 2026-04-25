@@ -13,7 +13,7 @@
   <dict>
     <key>NODE_ENV</key><string>production</string>
     <key>CACHE_TYPE</key><string>memory</string>
-    <key>PORT</key><string>1200</string>
+    <key>PORT</key><string>${RSSHUB_PORT}</string>
     <key>NODE_OPTIONS</key><string>--max-http-header-size=32768</string>
     <key>TWITTER_AUTH_TOKEN</key><string>${TWITTER_AUTH_TOKEN}</string>
     <key>PROXY_URI</key><string>${MBP_PROXY}</string>

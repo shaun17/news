@@ -20,6 +20,7 @@ dist/
 
 # brainstorm artifacts
 .superpowers/
+docs/superpowers/
 
 # n8n local data
 .n8n/

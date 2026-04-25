@@ -11,7 +11,8 @@ set -a; source "$PROJECT_DIR/.env"; set +a
 
 # Required vars referenced in any plist template
 required=(REMOTE_USER_HOME REMOTE_DIR MBP_PROXY RSSHUB_PORT WEB_PORT N8N_WEBHOOK_BASE
-          TWITTER_AUTH_TOKEN MOONSHOT_API_KEY MOONSHOT_MODEL MOONSHOT_API_URL)
+          TWITTER_AUTH_TOKEN MOONSHOT_API_KEY MOONSHOT_MODEL MOONSHOT_API_URL
+          PGUSER PGDATABASE PGHOST PGPORT PGSSL)
 for v in "${required[@]}"; do
   if [ -z "${!v:-}" ]; then echo "  ! \$$v is empty in .env" >&2; exit 1; fi
 done

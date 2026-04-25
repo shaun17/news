@@ -24,17 +24,26 @@ bash "$SCRIPT_DIR/migrate.sh"
 echo "=== Step 3: Build web frontend ==="
 bash "$SCRIPT_DIR/ssh.sh" "cd $REMOTE_DIR/web && npm install --legacy-peer-deps && npm run build"
 
-echo "=== Step 4: Render + import n8n workflows (envsubst from .env) ==="
+echo "=== Step 4: Render + import n8n credentials and workflows (envsubst from .env) ==="
 TMP=$(mktemp -d); trap "rm -rf $TMP" EXIT
+mkdir -p "$TMP/credentials"
 mkdir -p "$TMP/workflows"
+for f in "$PROJECT_DIR"/infra/n8n/credentials/*.json; do
+  envsubst < "$f" > "$TMP/credentials/$(basename "$f")"
+done
 for f in "$PROJECT_DIR"/infra/n8n/workflows/*.json; do
   envsubst < "$f" > "$TMP/workflows/$(basename "$f")"
 done
+ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "rm -rf /tmp/news-credentials && mkdir -p /tmp/news-credentials"
 ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "rm -rf /tmp/news-workflows && mkdir -p /tmp/news-workflows"
+rsync -az "$TMP/credentials/" "$REMOTE_USER@$REMOTE_HOST:/tmp/news-credentials/"
 rsync -az "$TMP/workflows/" "$REMOTE_USER@$REMOTE_HOST:/tmp/news-workflows/"
 bash "$SCRIPT_DIR/ssh.sh" "
+  for f in /tmp/news-credentials/*.json; do
+    echo \"Importing credential \$(basename \$f)...\" && n8n import:credentials --input=\"\$f\" 2>&1 | tail -1
+  done
   for f in /tmp/news-workflows/*.json; do
-    echo \"Importing \$(basename \$f)...\" && n8n import:workflow --input=\"\$f\" 2>&1 | tail -1
+    echo \"Importing workflow \$(basename \$f)...\" && n8n import:workflow --input=\"\$f\" 2>&1 | tail -1
   done
 "
 

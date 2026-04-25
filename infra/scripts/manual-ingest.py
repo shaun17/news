@@ -11,8 +11,21 @@ import psycopg
 
 PROXY = os.environ["PROXY"]
 RSSHUB = os.environ.get("RSSHUB", "http://127.0.0.1:1200")
-PG = {"dbname":"news","user":"coco"}
 UA = "news-aggregator/0.1 by wenren"
+
+def pg_config():
+    """从环境变量读取 Postgres 连接参数，避免在源码里写死部署账号和主机。"""
+    return {
+        key: value
+        for key, value in {
+            "dbname": os.environ.get("PGDATABASE"),
+            "user": os.environ.get("PGUSER"),
+            "host": os.environ.get("PGHOST"),
+            "port": os.environ.get("PGPORT"),
+            "password": os.environ.get("PGPASSWORD"),
+        }.items()
+        if value
+    }
 
 def fetch(url, use_proxy=True, timeout=20):
     req = urllib.request.Request(url, headers={"User-Agent": UA})
@@ -133,7 +146,7 @@ def upsert(rows):
       comment_count = EXCLUDED.comment_count,
       fetched_at = NOW()
     """
-    with psycopg.connect(**PG) as con, con.cursor() as cur:
+    with psycopg.connect(**pg_config()) as con, con.cursor() as cur:
         cur.executemany(sql, rows)
         con.commit()
     return len(rows)
