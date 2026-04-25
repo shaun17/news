@@ -1,0 +1,69 @@
+{
+  "id": "b2c3d4e5-f6a7-8901-bcde-f12222222222",
+  "name": "reddit-fetcher",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "22222222-2222-2222-2222-222222222221",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const subs = ['LocalLLaMA','MachineLearning','singularity','OpenAI','ClaudeAI','StableDiffusion'];\nreturn subs.map(s => ({ json: { sub: s } }));"
+      },
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "List Subs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.reddit.com/r/{{ $json.sub }}/hot.json?limit=25",
+        "method": "GET",
+        "options": {
+          "continueOnFail": true,
+          "proxy": "${MBP_PROXY}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "news-aggregator/0.1 by wenren" }
+          ]
+        }
+      },
+      "id": "22222222-2222-2222-2222-222222222223",
+      "name": "Fetch Sub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nfor (const it of $input.all()) {\n  const children = it.json?.data?.children || [];\n  for (const c of children) {\n    const d = c.data; if (!d) continue;\n    out.push({ json: {\n      source: 'reddit',\n      source_id: d.id,\n      title: d.title,\n      body: d.selftext || null,\n      post_url: `https://www.reddit.com${d.permalink}`,\n      link_url: d.is_self ? null : d.url,\n      author: d.author || null,\n      sub_or_handle: 'r/' + d.subreddit,\n      score: d.ups || 0,\n      comment_count: d.num_comments || 0,\n      published_at: new Date((d.created_utc || 0) * 1000).toISOString(),\n      is_ai_relevant: true\n    }});\n  }\n}\nreturn out;"
+      },
+      "id": "22222222-2222-2222-2222-222222222224",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "List Subs", "type": "main", "index": 0 }]]
+    },
+    "List Subs": {
+      "main": [[{ "node": "Fetch Sub", "type": "main", "index": 0 }]]
+    },
+    "Fetch Sub": {
+      "main": [[{ "node": "Normalize", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "staticData": null,
+  "tags": []
+}

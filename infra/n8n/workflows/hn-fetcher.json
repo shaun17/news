@@ -1,0 +1,80 @@
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1111111111",
+  "name": "hn-fetcher",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://hacker-news.firebaseio.com/v0/topstories.json",
+        "method": "GET",
+        "options": {
+          "proxy": "${MBP_PROXY}"
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111112",
+      "name": "Get Top Story IDs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.all().map(x => x.json);\nconst ids = raw.length === 1 && Array.isArray(raw[0]) ? raw[0] : raw;\nreturn ids.slice(0, 30).map(id => ({ json: { id } }));"
+      },
+      "id": "11111111-1111-1111-1111-111111111113",
+      "name": "Take 30",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://hacker-news.firebaseio.com/v0/item/{{ $json.id }}.json",
+        "method": "GET",
+        "options": {
+          "continueOnFail": true,
+          "proxy": "${MBP_PROXY}"
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111114",
+      "name": "Get Item",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  if (!j || !j.id || j.deleted || j.dead) continue;\n  out.push({ json: {\n    source: 'hn',\n    source_id: String(j.id),\n    title: j.title || '(untitled)',\n    body: j.text || null,\n    post_url: `https://news.ycombinator.com/item?id=${j.id}`,\n    link_url: j.url || null,\n    author: j.by || null,\n    sub_or_handle: null,\n    score: j.score || 0,\n    comment_count: j.descendants || 0,\n    published_at: new Date((j.time || 0) * 1000).toISOString()\n  }});\n}\nreturn out;"
+      },
+      "id": "11111111-1111-1111-1111-111111111115",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Get Top Story IDs", "type": "main", "index": 0 }]]
+    },
+    "Get Top Story IDs": {
+      "main": [[{ "node": "Take 30", "type": "main", "index": 0 }]]
+    },
+    "Take 30": {
+      "main": [[{ "node": "Get Item", "type": "main", "index": 0 }]]
+    },
+    "Get Item": {
+      "main": [[{ "node": "Normalize", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "staticData": null,
+  "tags": []
+}

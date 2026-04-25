@@ -1,0 +1,62 @@
+{
+  "id": "c3d4e5f6-a7b8-9012-cdef-133333333333",
+  "name": "x-fetcher",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "33333333-3333-3333-3333-333333333331",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const handles = [\n  'sama','AnthropicAI','demishassabis','ylecun',\n  'karpathy','AndrewYNg','_jasonwei','giffmana',\n  'swyx','simonw','jxnlco','abacaj'\n];\nreturn handles.map(h => ({ json: { handle: h } }));"
+      },
+      "id": "33333333-3333-3333-3333-333333333332",
+      "name": "List Handles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "=http://127.0.0.1:1200/twitter/user/{{ $json.handle }}",
+        "method": "GET",
+        "options": {
+          "continueOnFail": true
+        }
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Fetch Feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\nconst cutoff = Date.now() - 72 * 3600 * 1000;\n\nfor (const it of $input.all()) {\n  let body = typeof it.json === 'string' ? it.json : (it.json?.data || it.json?.body || '');\n  if (typeof body !== 'string' || !body.includes('<item>')) continue;\n\n  const handle = ((it.json?.url || it.json?.requestUrl || '')).split('/').pop();\n  const blocks = body.split('<item>').slice(1).map(s => '<item>' + s.split('</item>')[0]);\n\n  for (const block of blocks) {\n    const m = (re) => (block.match(re) || [, ''])[1];\n    const title = m(/<title>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/title>/);\n    const link  = m(/<link>([\\s\\S]*?)<\\/link>/);\n    const desc  = m(/<description>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/description>/);\n    const pub   = m(/<pubDate>([\\s\\S]*?)<\\/pubDate>/);\n    const guid  = m(/<guid[^>]*>([\\s\\S]*?)<\\/guid>/) || link;\n    const ts = pub ? Date.parse(pub) : Date.now();\n    if (ts < cutoff) continue;\n    out.push({ json: {\n      source: 'x',\n      source_id: guid,\n      title: title.replace(/<[^>]+>/g, '').slice(0, 200) || '(no title)',\n      body: desc.replace(/<[^>]+>/g, '').trim(),\n      post_url: link,\n      link_url: null,\n      author: '@' + (handle || ''),\n      sub_or_handle: '@' + (handle || ''),\n      score: 0,\n      comment_count: null,\n      published_at: new Date(ts).toISOString(),\n      is_ai_relevant: true\n    }});\n  }\n}\nreturn out;"
+      },
+      "id": "33333333-3333-3333-3333-333333333334",
+      "name": "Parse RSS + Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "List Handles", "type": "main", "index": 0 }]]
+    },
+    "List Handles": {
+      "main": [[{ "node": "Fetch Feed", "type": "main", "index": 0 }]]
+    },
+    "Fetch Feed": {
+      "main": [[{ "node": "Parse RSS + Normalize", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "staticData": null,
+  "tags": []
+}

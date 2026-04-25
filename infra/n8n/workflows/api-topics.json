@@ -1,0 +1,58 @@
+{
+  "id": "f6a7b8c9-d0e1-2345-fabc-166666666666",
+  "name": "api-topics",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "topics",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "id": "6f6a7b8c-9d0e-1234-5678-9abcdef00001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "a0000000-0000-0000-0000-000000000001"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, summary, item_count, source_count, total_score,\n       is_hot, is_rising, last_active_at\nFROM topics\nWHERE archived_at IS NULL\nORDER BY total_score DESC\nLIMIT 50;"
+      },
+      "id": "6f6a7b8c-9d0e-1234-5678-9abcdef00002",
+      "name": "Query Topics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "alwaysOutputData": true,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { topics: $input.all().map(x => x.json).filter(x => x && x.id != null) } }}"
+      },
+      "id": "6f6a7b8c-9d0e-1234-5678-9abcdef00003",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Query Topics", "type": "main", "index": 0 }]]
+    },
+    "Query Topics": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "staticData": null,
+  "tags": [],
+  "active": true
+}

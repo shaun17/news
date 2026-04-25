@@ -1,0 +1,172 @@
+{
+  "id": "d4e5f6a7-b8c9-0123-defa-144444444444",
+  "name": "ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 30 }]
+        }
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef001",
+      "name": "Cron 30min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "a1b2c3d4-e5f6-7890-abcd-ef1111111111",
+        "options": {}
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef002",
+      "name": "Fetch HN",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [450, 150]
+    },
+    {
+      "parameters": {
+        "workflowId": "b2c3d4e5-f6a7-8901-bcde-f12222222222",
+        "options": {}
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef003",
+      "name": "Fetch Reddit",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "c3d4e5f6-a7b8-9012-cdef-133333333333",
+        "options": {}
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef004",
+      "name": "Fetch X",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [450, 450]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef005",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(x => x.json).filter(r => r && r.source && r.source_id);\nif (!rows.length) return [{ json: { sql: 'SELECT 0', empty: true } }];\n\nconst esc = (v) => v === null || v === undefined ? 'NULL'\n  : typeof v === 'number' ? String(v)\n  : typeof v === 'boolean' ? (v ? 'TRUE' : 'FALSE')\n  : \"'\" + String(v).replace(/'/g,\"''\") + \"'\";\n\nconst values = rows.map(r => `(\n  ${esc(r.source)}, ${esc(r.source_id)}, ${esc(r.title)}, ${esc(r.body)},\n  ${esc(r.post_url)}, ${esc(r.link_url)}, ${esc(r.author)}, ${esc(r.sub_or_handle)},\n  ${esc(r.score||0)}, ${esc(r.comment_count)}, ${esc(r.published_at)}, NOW(),\n  ${r.is_ai_relevant === undefined ? 'NULL' : esc(r.is_ai_relevant)}\n)`).join(',\\n');\n\nconst sql = `\n  INSERT INTO items\n    (source, source_id, title, body, post_url, link_url, author, sub_or_handle,\n     score, comment_count, published_at, fetched_at, is_ai_relevant)\n  VALUES ${values}\n  ON CONFLICT (source, source_id) DO UPDATE SET\n    score         = EXCLUDED.score,\n    comment_count = EXCLUDED.comment_count,\n    fetched_at    = NOW()\n  RETURNING id, (xmax = 0) AS is_new;`;\n\nreturn [{ json: { sql } }];"
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef006",
+      "name": "Build Upsert SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}"
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef007",
+      "name": "Execute Upsert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1050, 300],
+      "credentials": {
+        "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = Array.isArray($input.first().json) ? $input.first().json : [$input.first().json];\nconst newIds = rows.filter(r => r && r.is_new === true).map(r => r.id);\nreturn [{ json: { newIds } }];"
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef008",
+      "name": "Collect New IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.newIds.length }}",
+              "rightValue": "0",
+              "operator": { "type": "number", "operation": "larger" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef009",
+      "name": "Has New?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "e5f6a7b8-c9d0-1234-efab-155555555555",
+        "options": {}
+      },
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef010",
+      "name": "Trigger Enrich",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Cron 30min": {
+      "main": [
+        [
+          { "node": "Fetch HN", "type": "main", "index": 0 },
+          { "node": "Fetch Reddit", "type": "main", "index": 0 },
+          { "node": "Fetch X", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch HN": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 0 }]]
+    },
+    "Fetch Reddit": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 1 }]]
+    },
+    "Fetch X": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 2 }]]
+    },
+    "Merge": {
+      "main": [[{ "node": "Build Upsert SQL", "type": "main", "index": 0 }]]
+    },
+    "Build Upsert SQL": {
+      "main": [[{ "node": "Execute Upsert", "type": "main", "index": 0 }]]
+    },
+    "Execute Upsert": {
+      "main": [[{ "node": "Collect New IDs", "type": "main", "index": 0 }]]
+    },
+    "Collect New IDs": {
+      "main": [[{ "node": "Has New?", "type": "main", "index": 0 }]]
+    },
+    "Has New?": {
+      "main": [
+        [{ "node": "Trigger Enrich", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "staticData": null,
+  "tags": []
+}

@@ -1,0 +1,62 @@
+{
+  "id": "e5f6a7b8-c9d0-1234-efab-155555555555",
+  "name": "enrich",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0001",
+      "name": "Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const passed = ($json.newIds || []);\nreturn [{ json: { passed, ids: passed } }];"
+      },
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0002",
+      "name": "Compute Target IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, source, source_id, title, body, post_url, link_url,\n       author, sub_or_handle, score, published_at, is_ai_relevant\nFROM items\nWHERE id = ANY(ARRAY[{{ ($json.passed || []).join(',') || '0' }}]::bigint[])\n   OR (is_ai_relevant IS NULL AND fetched_at > NOW() - INTERVAL '6 hours')\nORDER BY id;"
+      },
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0003",
+      "name": "Load Items",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 300],
+      "credentials": {
+        "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(x => ({ json: x.json }));"
+      },
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0099",
+      "name": "Passthrough",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Workflow Trigger": {
+      "main": [[{ "node": "Compute Target IDs", "type": "main", "index": 0 }]]
+    },
+    "Compute Target IDs": {
+      "main": [[{ "node": "Load Items", "type": "main", "index": 0 }]]
+    },
+    "Load Items": {
+      "main": [[{ "node": "Passthrough", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "staticData": null,
+  "tags": []
+}

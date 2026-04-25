@@ -1,0 +1,26 @@
+# env
+.env
+.env.local
+*.env
+
+# node
+node_modules/
+.next/
+out/
+dist/
+
+# editors
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# logs
+*.log
+
+# brainstorm artifacts
+.superpowers/
+docs/superpowers/
+
+# n8n local data
+.n8n/

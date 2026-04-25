@@ -1,0 +1,41 @@
+{
+  "id": "d0e1f2a3-b4c5-6789-defa-100000000000",
+  "name": "cleanup",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "triggers": [{ "cron": "0 4 * * *" }]
+        }
+      },
+      "id": "0d0e1f2a-3b4c-5678-9012-abcdef000001",
+      "name": "Daily 4am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM items WHERE published_at < NOW() - INTERVAL '30 days';\nUPDATE topics SET archived_at = NOW()\n  WHERE last_active_at < NOW() - INTERVAL '7 days' AND archived_at IS NULL;\nDELETE FROM topics WHERE archived_at < NOW() - INTERVAL '30 days';"
+      },
+      "id": "0d0e1f2a-3b4c-5678-9012-abcdef000002",
+      "name": "Cleanup",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 4am": {
+      "main": [[{ "node": "Cleanup", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "staticData": null,
+  "tags": [],
+  "active": true
+}
