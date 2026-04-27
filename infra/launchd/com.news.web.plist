@@ -14,6 +14,7 @@
   <dict>
     <key>NODE_ENV</key><string>production</string>
     <key>N8N_WEBHOOK_BASE</key><string>${N8N_WEBHOOK_BASE}</string>
+    <key>MBP_PROXY</key><string>${MBP_PROXY}</string>
     <key>PORT</key><string>${WEB_PORT}</string>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string>
   </dict>

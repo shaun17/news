@@ -41,7 +41,7 @@
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Trigger Ingest", "type": "main", "index": 0 }, { "node": "Respond", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }, { "node": "Trigger Ingest", "type": "main", "index": 0 }]]
     },
     "Trigger Ingest": {
       "main": []

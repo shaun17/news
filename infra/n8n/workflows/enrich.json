@@ -8,55 +8,260 @@
       "name": "Workflow Trigger",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const passed = ($json.newIds || []);\nreturn [{ json: { passed, ids: passed } }];"
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 60
+            }
+          ]
+        }
+      },
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0009",
+      "name": "Hourly Enrich",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const passed = ($json.newIds || []).map(Number).filter(Number.isFinite);\nreturn [{ json: { passed, ids: passed } }];"
       },
       "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0002",
       "name": "Compute Target IDs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, source, source_id, title, body, post_url, link_url,\n       author, sub_or_handle, score, published_at, is_ai_relevant\nFROM items\nWHERE id = ANY(ARRAY[{{ ($json.passed || []).join(',') || '0' }}]::bigint[])\n   OR (is_ai_relevant IS NULL AND fetched_at > NOW() - INTERVAL '6 hours')\nORDER BY id;"
+        "query": "WITH target_ids AS (\n  SELECT ARRAY[{{ ($json.passed || []).join(',') || '0' }}]::bigint[] AS ids\n), candidate_items AS (\n  SELECT i.id, i.source, i.source_id, i.title, i.body, i.post_url, i.link_url,\n         i.author, i.sub_or_handle, i.score, i.comment_count, i.published_at,\n         i.fetched_at, i.is_ai_relevant, i.entities\n    FROM items i\n    CROSS JOIN target_ids t\n   WHERE i.id = ANY(t.ids)\n      OR i.is_ai_relevant IS NULL\n      OR (i.is_ai_relevant = TRUE AND i.entities IS NULL)\n      OR (\n        i.is_ai_relevant = TRUE\n        AND i.entities IS NOT NULL\n        AND NOT EXISTS (SELECT 1 FROM item_topics it WHERE it.item_id = i.id)\n      )\n   ORDER BY CASE WHEN i.id = ANY(t.ids) THEN 0 ELSE 1 END,\n            i.fetched_at DESC\n   LIMIT 30\n), active_topics AS (\n  SELECT id, name, summary, key_entities, item_count, source_count, total_score\n    FROM topics\n   WHERE archived_at IS NULL\n   ORDER BY total_score DESC\n   LIMIT 40\n)\nSELECT\n  COALESCE((SELECT jsonb_agg(to_jsonb(ci) ORDER BY ci.fetched_at DESC) FROM candidate_items ci), '[]'::jsonb) AS items,\n  COALESCE((SELECT jsonb_agg(to_jsonb(at) ORDER BY at.total_score DESC) FROM active_topics at), '[]'::jsonb) AS topics;"
       },
       "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0003",
-      "name": "Load Items",
+      "name": "Load Enrich Context",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [650, 300],
+      "alwaysOutputData": true,
+      "position": [
+        650,
+        300
+      ],
       "credentials": {
-        "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
+        "postgres": {
+          "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0",
+          "name": "news-postgres"
+        }
       }
     },
     {
       "parameters": {
-        "jsCode": "return $input.all().map(x => ({ json: x.json }));"
+        "jsCode": "const row = $input.first()?.json || {};\n\n// 解析 Postgres JSONB 返回值，兼容字符串和对象两种形态。\nconst readArray = (value) => {\n  if (Array.isArray(value)) return value;\n  if (typeof value === 'string' && value.trim()) {\n    try {\n      const parsed = JSON.parse(value);\n      return Array.isArray(parsed) ? parsed : [];\n    } catch (error) {\n      return [];\n    }\n  }\n  return [];\n};\n\nconst truncate = (value, max) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);\nconst items = readArray(row.items).map((item) => ({\n  id: Number(item.id),\n  source: item.source,\n  title: truncate(item.title, 180),\n  body: truncate(item.body, 300),\n  sub_or_handle: item.sub_or_handle || null,\n  score: Number(item.score || 0),\n  published_at: item.published_at,\n  is_ai_relevant: item.is_ai_relevant,\n  entities: item.entities || null\n})).filter((item) => Number.isFinite(item.id));\n\nconst topics = readArray(row.topics).map((topic) => ({\n  id: Number(topic.id),\n  name: topic.name,\n  summary: truncate(topic.summary, 160),\n  key_entities: topic.key_entities || {},\n  item_count: Number(topic.item_count || 0),\n  source_count: Number(topic.source_count || 0),\n  total_score: Number(topic.total_score || 0)\n})).filter((topic) => Number.isFinite(topic.id));\n\nconst prompt = [\n  '你是 AI 信息流的主题聚类器。请根据已有主题和待处理内容，判断 AI 相关性、提取实体，并把内容归入已有主题或新主题。',\n  '',\n  '规则：',\n  '1. Reddit 和 X 来源已由上游账号/社区过滤，通常视为 AI 相关；HN 需要按标题和正文判断。',\n  '2. entities 必须包含 models、people、companies、products、topics 五个数组字段。没有就给空数组。',\n  '3. 如果内容和已有主题明显相关，填 topic_id。',\n  '4. 如果至少 2 条内容共享具体模型、公司或产品，并且不适合已有主题，可以创建新主题。新主题 key 要能被 items[].new_topic_key 引用。',\n  '5. 不要为单条孤立内容创建新主题。不要解释，只返回严格 JSON。',\n  '',\n  '返回 JSON 结构：',\n  '{\"items\":[{\"id\":123,\"is_ai_relevant\":true,\"entities\":{\"models\":[],\"people\":[],\"companies\":[],\"products\":[],\"topics\":[]},\"topic_id\":1,\"new_topic_key\":null}],\"new_topics\":[{\"key\":\"t1\",\"name\":\"简短中文主题名\",\"summary\":\"2-3句中文摘要\",\"key_entities\":[\"核心实体\"],\"item_ids\":[123,456]}]}',\n  '',\n  '已有主题：',\n  JSON.stringify(topics),\n  '',\n  '待处理内容：',\n  JSON.stringify(items)\n].join('\\n');\n\nreturn [{\n  json: {\n    itemCount: items.length,\n    topicCount: topics.length,\n    itemIds: items.map((item) => item.id),\n    topicIds: topics.map((topic) => topic.id),\n    items,\n    topics,\n    request: {\n      model: '${MOONSHOT_MODEL}',\n      temperature: 0.2,\n      max_tokens: 3500,\n      response_format: { type: 'json_object' },\n      messages: [\n        { role: 'system', content: '你只输出可解析 JSON，不输出 Markdown。' },\n        { role: 'user', content: prompt }\n      ]\n    }\n  }\n}];"
       },
-      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0099",
-      "name": "Passthrough",
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0004",
+      "name": "Build Enrich Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [850, 300]
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "${MOONSHOT_API_URL}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0005",
+      "name": "Call Kimi Enricher",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1050,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "c02c02c0-2c02-c02c-02c0-2c02c02c02c0",
+          "name": "moonshot-api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Build Enrich Request').first().json;\nconst response = $input.first()?.json || {};\nconst validItemIds = new Set((source.itemIds || []).map(Number));\nconst validTopicIds = new Set((source.topicIds || []).map(Number));\nconst sourceItems = new Map((source.items || []).map((item) => [Number(item.id), item]));\n\nconst sqlString = (value) => \"'\" + String(value ?? '').replace(/'/g, \"''\") + \"'\";\nconst sqlJson = (value) => sqlString(JSON.stringify(value)) + '::jsonb';\nconst sqlBool = (value) => value ? 'TRUE' : 'FALSE';\n\nconst parseJson = (value) => {\n  if (value && typeof value === 'object') return value;\n  let text = String(value || '').trim();\n  if (text.startsWith('```')) {\n    text = text.replace(new RegExp('^```(?:json)?\\\\s*', 'i'), '').replace(new RegExp('\\\\s*```$', 'i'), '');\n  }\n  try {\n    return JSON.parse(text);\n  } catch (error) {\n    const match = text.match(/(\\{[\\s\\S]*\\}|\\[[\\s\\S]*\\])/);\n    if (!match) throw error;\n    return JSON.parse(match[1]);\n  }\n};\n\nconst normalizeList = (value) => Array.isArray(value)\n  ? [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))].slice(0, 8)\n  : [];\n\n// 统一实体字段，避免模型返回缺字段或错类型时污染数据库。\nconst normalizeEntities = (value) => {\n  const raw = value && typeof value === 'object' ? value : {};\n  return {\n    models: normalizeList(raw.models),\n    people: normalizeList(raw.people),\n    companies: normalizeList(raw.companies),\n    products: normalizeList(raw.products),\n    topics: normalizeList(raw.topics)\n  };\n};\n\nconst mergeEntities = (items, extra = []) => {\n  const merged = { models: [], people: [], companies: [], products: [], topics: [] };\n  const add = (key, value) => {\n    const text = String(value || '').trim();\n    if (text && !merged[key].includes(text)) merged[key].push(text);\n  };\n  for (const value of extra) add('models', value);\n  for (const item of items) {\n    const entities = normalizeEntities(item.entities || sourceItems.get(Number(item.id))?.entities);\n    for (const key of Object.keys(merged)) {\n      for (const value of entities[key]) add(key, value);\n    }\n  }\n  for (const key of Object.keys(merged)) merged[key] = merged[key].slice(0, 12);\n  return merged;\n};\n\nconst refreshSql = () => `\nWITH stats AS (\n  SELECT t.id,\n         COUNT(i.id)::int AS cnt,\n         COUNT(DISTINCT i.source)::int AS scount,\n         COALESCE(SUM(i.score), 0)::bigint AS tscore,\n         MAX(i.published_at) AS last_active\n    FROM topics t\n    LEFT JOIN item_topics it ON it.topic_id = t.id\n    LEFT JOIN items i ON i.id = it.item_id AND i.published_at > NOW() - INTERVAL '3 days'\n   WHERE t.archived_at IS NULL\n   GROUP BY t.id\n)\nUPDATE topics t SET\n  item_count = stats.cnt,\n  source_count = stats.scount,\n  total_score = stats.tscore,\n  last_active_at = COALESCE(stats.last_active, t.last_active_at)\nFROM stats\nWHERE t.id = stats.id;\n\nUPDATE topics\n   SET is_rising = (first_seen_at >= NOW() - INTERVAL '12 hours' AND item_count >= 3)\n WHERE archived_at IS NULL;\n\nWITH ranked AS (\n  SELECT id, total_score,\n         PERCENT_RANK() OVER (ORDER BY total_score DESC) AS pr\n    FROM topics\n   WHERE archived_at IS NULL\n)\nUPDATE topics t SET is_hot = (\n  t.source_count >= 2 AND COALESCE(ranked.pr, 1) <= 0.30\n)\nFROM ranked\nWHERE ranked.id = t.id;\n`;\n\nif (!source.itemCount) {\n  return [{ json: { sql: refreshSql(), itemUpdates: 0, existingLinks: 0, newTopics: 0 } }];\n}\n\nconst content = response?.choices?.[0]?.message?.content\n  || response?.data?.choices?.[0]?.message?.content\n  || response?.body?.choices?.[0]?.message?.content\n  || response?.text\n  || response?.data\n  || response;\n\nconst parsed = parseJson(content);\nconst returnedItems = Array.isArray(parsed.items) ? parsed.items : [];\nconst returnedTopics = Array.isArray(parsed.new_topics) ? parsed.new_topics : [];\nconst statements = [];\nconst itemUpdates = [];\nconst existingLinks = [];\nconst topicKeyItems = new Map();\n\nfor (const item of returnedItems) {\n  const id = Number(item.id);\n  if (!validItemIds.has(id)) continue;\n\n  const relevant = item.is_ai_relevant !== false;\n  const entities = relevant ? normalizeEntities(item.entities) : null;\n  itemUpdates.push({ id, relevant, entities });\n\n  const topicId = Number(item.topic_id || 0);\n  if (relevant && validTopicIds.has(topicId)) existingLinks.push({ itemId: id, topicId });\n\n  const topicKey = String(item.new_topic_key || '').trim();\n  if (relevant && topicKey) {\n    if (!topicKeyItems.has(topicKey)) topicKeyItems.set(topicKey, new Set());\n    topicKeyItems.get(topicKey).add(id);\n  }\n}\n\nif (itemUpdates.length) {\n  const values = itemUpdates.map((item) => `(${item.id}::bigint, ${sqlBool(item.relevant)}, ${item.entities ? sqlJson(item.entities) : 'NULL::jsonb'})`).join(',\\n');\n  statements.push(`\nWITH incoming(id, is_ai_relevant, entities) AS (VALUES\n${values}\n)\nUPDATE items i SET\n  is_ai_relevant = incoming.is_ai_relevant,\n  entities = CASE\n    WHEN incoming.is_ai_relevant IS TRUE THEN COALESCE(incoming.entities, i.entities)\n    ELSE i.entities\n  END\nFROM incoming\nWHERE i.id = incoming.id;\n`);\n}\n\nconst uniqueExistingLinks = [...new Map(existingLinks.map((link) => [link.itemId + ':' + link.topicId, link])).values()];\nif (uniqueExistingLinks.length) {\n  const values = uniqueExistingLinks.map((link) => `(${link.itemId}::bigint, ${link.topicId}::bigint)`).join(',');\n  const topicIds = [...new Set(uniqueExistingLinks.map((link) => link.topicId))].join(',');\n  statements.push(`\nINSERT INTO item_topics(item_id, topic_id)\nVALUES ${values}\nON CONFLICT DO NOTHING;\nUPDATE topics SET last_active_at = NOW() WHERE id IN (${topicIds});\n`);\n}\n\nlet newTopicCount = 0;\nfor (const topic of returnedTopics) {\n  const key = String(topic.key || '').trim();\n  const name = String(topic.name || '').trim().slice(0, 40);\n  if (!key || !name) continue;\n\n  const ids = new Set((Array.isArray(topic.item_ids) ? topic.item_ids : []).map(Number).filter((id) => validItemIds.has(id)));\n  if (topicKeyItems.has(key)) {\n    for (const id of topicKeyItems.get(key)) ids.add(id);\n  }\n  if (ids.size < 2) continue;\n\n  const linkedItems = [...ids].map((id) => ({ ...sourceItems.get(id), ...itemUpdates.find((item) => item.id === id) }));\n  const mergedEntities = mergeEntities(linkedItems, normalizeList(topic.key_entities));\n  const summary = String(topic.summary || '').trim().slice(0, 800);\n  const itemValues = [...ids].map((id) => `(${id}::bigint)`).join(',');\n  statements.push(`\nWITH existing AS (\n  SELECT id FROM topics\n   WHERE archived_at IS NULL AND lower(name) = lower(${sqlString(name)})\n   LIMIT 1\n), inserted AS (\n  INSERT INTO topics(name, summary, key_entities)\n  SELECT ${sqlString(name)}, ${sqlString(summary)}, ${sqlJson(mergedEntities)}\n  WHERE NOT EXISTS (SELECT 1 FROM existing)\n  RETURNING id\n), chosen AS (\n  SELECT id FROM existing\n  UNION ALL\n  SELECT id FROM inserted\n  LIMIT 1\n), linked AS (\n  INSERT INTO item_topics(item_id, topic_id)\n  SELECT item_id, chosen.id\n    FROM (VALUES ${itemValues}) AS v(item_id)\n    CROSS JOIN chosen\n  ON CONFLICT DO NOTHING\n  RETURNING topic_id\n)\nUPDATE topics\n   SET last_active_at = NOW()\n WHERE id = (SELECT id FROM chosen);\n`);\n  newTopicCount += 1;\n}\n\nstatements.push(refreshSql());\nstatements.push(\"SELECT 'enrich applied' AS status;\");\n\nreturn [{\n  json: {\n    sql: statements.join('\\n'),\n    itemUpdates: itemUpdates.length,\n    existingLinks: uniqueExistingLinks.length,\n    newTopics: newTopicCount\n  }\n}];"
+      },
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0006",
+      "name": "Build Apply SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}"
+      },
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0007",
+      "name": "Apply Topics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1450,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0",
+          "name": "news-postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const plan = $('Build Apply SQL').first().json;\nreturn [{\n  json: {\n    ok: true,\n    itemUpdates: plan.itemUpdates || 0,\n    existingLinks: plan.existingLinks || 0,\n    newTopics: plan.newTopics || 0\n  }\n}];"
+      },
+      "id": "5e5f6a7b-8c9d-0123-4567-89abcdef0008",
+      "name": "Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        300
+      ]
     }
   ],
   "connections": {
     "Workflow Trigger": {
-      "main": [[{ "node": "Compute Target IDs", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Compute Target IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Compute Target IDs": {
-      "main": [[{ "node": "Load Items", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Load Enrich Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Load Items": {
-      "main": [[{ "node": "Passthrough", "type": "main", "index": 0 }]]
+    "Load Enrich Context": {
+      "main": [
+        [
+          {
+            "node": "Build Enrich Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Enrich Request": {
+      "main": [
+        [
+          {
+            "node": "Call Kimi Enricher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Kimi Enricher": {
+      "main": [
+        [
+          {
+            "node": "Build Apply SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Apply SQL": {
+      "main": [
+        [
+          {
+            "node": "Apply Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Topics": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hourly Enrich": {
+      "main": [
+        [
+          {
+            "node": "Compute Target IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
   "staticData": null,
-  "tags": []
+  "tags": [],
+  "active": true
 }
