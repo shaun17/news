@@ -24,3 +24,6 @@ docs/superpowers/
 
 # n8n local data
 .n8n/
+
+# claude code tooling cache
+.claude/
