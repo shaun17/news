@@ -1,9 +1,14 @@
-import { N8N_BASE } from './env';
+import { N8N_BASE, NEWS_API_SECRET } from './env';
+
+export function n8nAuthHeaders(): Record<string, string> {
+  // 所有服务端到 n8n 的请求都走同一个鉴权头，避免漏掉 SSR 首屏请求。
+  return NEWS_API_SECRET ? { 'X-News-API-Secret': NEWS_API_SECRET } : {};
+}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${N8N_BASE}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...n8nAuthHeaders(), ...(init?.headers || {}) },
     cache: 'no-store'
   });
   if (!res.ok) throw new Error(`n8n ${path} ${res.status}`);

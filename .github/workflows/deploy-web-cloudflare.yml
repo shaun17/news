@@ -1,0 +1,61 @@
+name: Deploy Web to Cloudflare
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-web-cloudflare.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      NEWS_API_SECRET: ${{ secrets.NEWS_API_SECRET }}
+      N8N_WEBHOOK_BASE: https://n8n-api.wenmsg.fun
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      - name: Write Cloudflare secret file
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          if (!process.env.NEWS_API_SECRET) {
+            throw new Error('NEWS_API_SECRET is required');
+          }
+
+          // 通过临时文件把 GitHub Secret 交给 wrangler，避免把密钥写入仓库配置。
+          fs.writeFileSync(
+            '.cloudflare-secrets.json',
+            JSON.stringify({ NEWS_API_SECRET: process.env.NEWS_API_SECRET })
+          );
+          NODE
+
+      - run: npm run build:worker
+
+      - name: Deploy Worker
+        run: npx opennextjs-cloudflare deploy -- --secrets-file .cloudflare-secrets.json
+
+      - name: Remove local secret file
+        if: always()
+        run: rm -f .cloudflare-secrets.json

@@ -7,14 +7,24 @@
         "httpMethod": "GET",
         "path": "items",
         "options": {},
-        "responseMode": "responseNode"
+        "responseMode": "responseNode",
+        "authentication": "headerAuth"
       },
       "id": "7a7b8c9d-0e1f-2345-6789-abcdef000001",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [250, 300],
-      "webhookId": "b0000000-0000-0000-0000-000000000002"
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "b0000000-0000-0000-0000-000000000002",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "c03c03c0-3c03-c03c-03c0-3c03c03c03c0",
+          "name": "news-api-secret"
+        }
+      }
     },
     {
       "parameters": {
@@ -26,9 +36,15 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "alwaysOutputData": true,
-      "position": [450, 300],
+      "position": [
+        450,
+        300
+      ],
       "credentials": {
-        "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
+        "postgres": {
+          "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0",
+          "name": "news-postgres"
+        }
       }
     },
     {
@@ -40,18 +56,39 @@
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Query Items", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Query Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Query Items": {
-      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
   "staticData": null,
   "tags": [],
   "active": true
