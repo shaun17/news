@@ -9,10 +9,17 @@ import { RefreshButton } from './RefreshButton';
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
-export function HomeClient(props: { initialTopics: Topic[]; initialItems: Item[] }) {
+export function HomeClient(props: {
+  initialTopics: Topic[];
+  initialItems: Item[];
+  initialTopicId: number | null;
+}) {
   const search  = useSearchParams();
   const router  = useRouter();
-  const topicId = search.get('topic') ? Number(search.get('topic')) : null;
+  // SSR 时 useSearchParams 在 client component 内取不到 query，
+  // 用 server 传入的 initialTopicId 兜底，避免首屏渲染默认状态后再 hydrate 闪烁。
+  const urlTopic = search.get('topic');
+  const topicId  = urlTopic ? Number(urlTopic) : props.initialTopicId;
 
   const { data: topicsData } = useSWR<{ topics: Topic[] }>(
     '/api/topics', fetcher, { fallbackData: { topics: props.initialTopics }, refreshInterval: 5*60*1000 }
@@ -23,8 +30,10 @@ export function HomeClient(props: { initialTopics: Topic[]; initialItems: Item[]
     { fallbackData: { items: props.initialItems }, refreshInterval: 5*60*1000 }
   );
 
-  const topics = topicsData?.topics ?? [];
-  const items  = itemsData?.items  ?? [];
+  // n8n webhook 把 BIGINT 序列化成字符串；统一在 normalize 这一层转回 number，
+  // 避免下游每个 === 比较都要担心类型不匹配。
+  const topics = (topicsData?.topics ?? []).map(t => ({ ...t, id: Number(t.id) }));
+  const items  = (itemsData?.items  ?? []).map(i => ({ ...i, id: Number(i.id) }));
   const activeTopic = topics.find(t => t.id === topicId) || null;
 
   const setTopic = (id: number | null) => {
@@ -35,18 +44,40 @@ export function HomeClient(props: { initialTopics: Topic[]; initialItems: Item[]
 
   const refresh = async () => {
     await fetch('/api/refresh', { method: 'POST' });
-    setTimeout(() => { mutate('/api/topics'); mutate(`/api/items${topicId ? `?topic=${topicId}` : ''}`); }, 60*1000);
+    setTimeout(() => {
+      mutate('/api/topics');
+      mutate(`/api/items${topicId ? `?topic=${topicId}` : ''}`);
+    }, 60*1000);
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <header className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold text-neutral-100">AI 信息热点</h1>
-        <RefreshButton onRefresh={refresh} />
+    <div className="h-screen flex flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-zinc-800">
+        <div className="max-w-6xl mx-auto px-6 pt-8 pb-5 flex items-end justify-between gap-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-amber-300/80 mb-1">
+              wire · ai signal
+            </p>
+            <h1 className="font-display text-3xl leading-none text-zinc-50 tracking-tight">
+              AI 信息热点
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500 hidden sm:inline">
+              HN · Reddit · X
+            </span>
+            <RefreshButton onRefresh={refresh} />
+          </div>
+        </div>
       </header>
-      <div className="flex gap-4">
-        <TopicSidebar topics={topics} activeId={topicId} onSelect={setTopic} />
-        <ItemFeed items={items} activeTopic={activeTopic} onClearTopic={() => setTopic(null)} />
+
+      <div className="flex-1 min-h-0 max-w-6xl w-full mx-auto px-6 pt-6 pb-6">
+        <div className="flex gap-6 h-full">
+          <TopicSidebar topics={topics} activeId={topicId} onSelect={setTopic} />
+          <div className="flex-1 min-w-0 overflow-y-auto pr-1">
+            <ItemFeed items={items} activeTopic={activeTopic} onClearTopic={() => setTopic(null)} />
+          </div>
+        </div>
       </div>
     </div>
   );

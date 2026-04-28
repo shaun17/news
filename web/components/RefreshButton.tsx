@@ -2,15 +2,28 @@
 import { useState } from 'react';
 
 export function RefreshButton({ onRefresh }: { onRefresh: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
+  const [state, setState] = useState<'idle' | 'pending'>('idle');
+
   return (
     <button
       type="button"
-      disabled={busy}
-      onClick={async () => { setBusy(true); try { await onRefresh(); } finally { setBusy(false); } }}
-      className="px-3 py-1.5 text-sm rounded-md bg-blue-500/20 hover:bg-blue-500/30 text-blue-100 disabled:opacity-50"
+      disabled={state === 'pending'}
+      onClick={async () => {
+        setState('pending');
+        try {
+          await onRefresh();
+        } finally {
+          setTimeout(() => setState('idle'), 60_000);
+        }
+      }}
+      className={
+        'font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 border transition ' +
+        (state === 'pending'
+          ? 'border-zinc-700 text-zinc-500 cursor-default'
+          : 'border-amber-300 text-amber-200 hover:bg-amber-300 hover:text-zinc-950')
+      }
     >
-      {busy ? '刷新中…' : '刷新'}
+      {state === 'pending' ? '· · ·  ingesting' : '↻ refresh'}
     </button>
   );
 }

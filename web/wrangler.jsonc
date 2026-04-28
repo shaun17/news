@@ -17,6 +17,10 @@
       "service": "news-web"
     }
   ],
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "news.wenmsg.fun", "custom_domain": true }
+  ],
   "vars": {
     "N8N_WEBHOOK_BASE": "https://n8n-api.wenmsg.fun"
   },
