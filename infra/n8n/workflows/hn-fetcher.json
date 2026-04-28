@@ -22,7 +22,10 @@
       "name": "Get Top Story IDs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [450, 300]
+      "position": [450, 300],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -39,7 +42,6 @@
         "url": "=https://hacker-news.firebaseio.com/v0/item/{{ $json.id }}.json",
         "method": "GET",
         "options": {
-          "continueOnFail": true,
           "proxy": "${MBP_PROXY}"
         }
       },
@@ -47,7 +49,11 @@
       "name": "Get Item",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [850, 300]
+      "position": [850, 300],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -76,5 +82,6 @@
   },
   "settings": { "callerPolicy": "workflowsFromSameOwner" },
   "staticData": null,
-  "tags": []
+  "tags": [],
+  "active": true
 }

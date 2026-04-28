@@ -5,7 +5,7 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "minutes", "minutesInterval": 30 }]
+          "interval": [{ "field": "minutes", "minutesInterval": 60 }]
         }
       },
       "id": "4d4e5f6a-7b8c-9012-3456-789abcdef001",
@@ -13,6 +13,14 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
       "position": [250, 300]
+    },
+    {
+      "parameters": {},
+      "id": "4d4e5f6a-7b8c-9012-3456-789abcdef011",
+      "name": "Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 520]
     },
     {
       "parameters": {
@@ -49,7 +57,8 @@
     },
     {
       "parameters": {
-        "mode": "append"
+        "mode": "append",
+        "numberInputs": 3
       },
       "id": "4d4e5f6a-7b8c-9012-3456-789abcdef005",
       "name": "Merge",
@@ -103,7 +112,7 @@
             {
               "id": "cond1",
               "leftValue": "={{ $json.newIds.length }}",
-              "rightValue": "0",
+              "rightValue": 0,
               "operator": { "type": "number", "operation": "larger" }
             }
           ],
@@ -130,6 +139,15 @@
   ],
   "connections": {
     "Cron 30min": {
+      "main": [
+        [
+          { "node": "Fetch HN", "type": "main", "index": 0 },
+          { "node": "Fetch Reddit", "type": "main", "index": 0 },
+          { "node": "Fetch X", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Workflow Trigger": {
       "main": [
         [
           { "node": "Fetch HN", "type": "main", "index": 0 },
@@ -168,5 +186,6 @@
   },
   "settings": { "callerPolicy": "workflowsFromSameOwner" },
   "staticData": null,
-  "tags": []
+  "tags": [],
+  "active": true
 }
