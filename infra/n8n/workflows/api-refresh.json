@@ -7,14 +7,24 @@
         "httpMethod": "POST",
         "path": "refresh",
         "options": {},
-        "responseMode": "responseNode"
+        "responseMode": "responseNode",
+        "authentication": "headerAuth"
       },
       "id": "9c9d0e1f-2a3b-4567-8901-abcdef000001",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [250, 300],
-      "webhookId": "d0000000-0000-0000-0000-000000000004"
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "d0000000-0000-0000-0000-000000000004",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "c03c03c0-3c03-c03c-03c0-3c03c03c03c0",
+          "name": "news-api-secret"
+        }
+      }
     },
     {
       "parameters": {
@@ -25,7 +35,10 @@
       "name": "Trigger Ingest",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
@@ -36,18 +49,36 @@
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Trigger Ingest", "type": "main", "index": 0 }, { "node": "Respond", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trigger Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Trigger Ingest": {
       "main": []
     }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
   "staticData": null,
   "tags": [],
   "active": true

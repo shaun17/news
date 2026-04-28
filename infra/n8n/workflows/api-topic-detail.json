@@ -7,14 +7,24 @@
         "httpMethod": "GET",
         "path": "topic-detail",
         "options": {},
-        "responseMode": "responseNode"
+        "responseMode": "responseNode",
+        "authentication": "headerAuth"
       },
       "id": "8b8c9d0e-1f2a-3456-7890-abcdef000001",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [250, 300],
-      "webhookId": "c0000000-0000-0000-0000-000000000003"
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "c0000000-0000-0000-0000-000000000003",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "c03c03c0-3c03-c03c-03c0-3c03c03c03c0",
+          "name": "news-api-secret"
+        }
+      }
     },
     {
       "parameters": {
@@ -25,9 +35,15 @@
       "name": "Query Topic",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [450, 300],
+      "position": [
+        450,
+        300
+      ],
       "credentials": {
-        "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
+        "postgres": {
+          "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0",
+          "name": "news-postgres"
+        }
       }
     },
     {
@@ -40,9 +56,15 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "alwaysOutputData": true,
-      "position": [650, 300],
+      "position": [
+        650,
+        300
+      ],
       "credentials": {
-        "postgres": { "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0", "name": "news-postgres" }
+        "postgres": {
+          "id": "c01c01c0-1c01-c01c-01c0-1c01c01c01c0",
+          "name": "news-postgres"
+        }
       }
     },
     {
@@ -54,21 +76,50 @@
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [850, 300]
+      "position": [
+        850,
+        300
+      ]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Query Topic", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Query Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Query Topic": {
-      "main": [[{ "node": "Query Items", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Query Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Query Items": {
-      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
   "staticData": null,
   "tags": [],
   "active": true

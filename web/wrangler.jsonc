@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "news-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-04-28",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "news-web"
+    }
+  ],
+  "vars": {
+    "N8N_WEBHOOK_BASE": "https://n8n-api.wenmsg.fun"
+  },
+  "secrets": {
+    "required": [
+      "NEWS_API_SECRET"
+    ]
+  },
+  "observability": {
+    "enabled": true
+  }
+}
