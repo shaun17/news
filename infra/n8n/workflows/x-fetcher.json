@@ -12,7 +12,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const handles = [\n  'sama','AnthropicAI','demishassabis','ylecun',\n  'karpathy','AndrewYNg','_jasonwei','giffmana',\n  'swyx','simonw','jxnlco','abacaj'\n];\nreturn handles.map(h => ({ json: { handle: h } }));"
+        "jsCode": "const handles = [\n  'sama','AnthropicAI','demishassabis','ylecun',\n  'karpathy','AndrewYNg','_jasonwei','giffmana',\n  'swyx','simonw','jxnlco','abacaj',\n  'trq212','noahzweben',\n  'OpenAI','claudeai','GeminiApp','deepseek_ai','Kimi_Moonshot',\n  'ClaudeDevs','OpenAIDevs'\n];\nreturn handles.map(h => ({ json: { handle: h } }));"
       },
       "id": "33333333-3333-3333-3333-333333333332",
       "name": "List Handles",
@@ -24,15 +24,17 @@
       "parameters": {
         "url": "=http://127.0.0.1:1200/twitter/user/{{ $json.handle }}",
         "method": "GET",
-        "options": {
-          "continueOnFail": true
-        }
+        "options": {}
       },
       "id": "33333333-3333-3333-3333-333333333333",
       "name": "Fetch Feed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [650, 300]
+      "position": [650, 300],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -58,5 +60,6 @@
   },
   "settings": { "callerPolicy": "workflowsFromSameOwner" },
   "staticData": null,
-  "tags": []
+  "tags": [],
+  "active": true
 }

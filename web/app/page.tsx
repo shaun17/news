@@ -28,7 +28,7 @@ export default async function Page({ searchParams }: PageProps) {
   const { topics, items } = await load(topicId);
   return (
     <Suspense fallback={<div className="text-zinc-400 text-sm p-6">Loading…</div>}>
-      <HomeClient initialTopics={topics} initialItems={items} />
+      <HomeClient initialTopics={topics} initialItems={items} initialTopicId={topicId} />
     </Suspense>
   );
 }

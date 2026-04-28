@@ -22,28 +22,24 @@
     },
     {
       "parameters": {
-        "url": "=https://www.reddit.com/r/{{ $json.sub }}/hot.json?limit=25",
+        "url": "=http://127.0.0.1:${WEB_PORT}/api/reddit/hot?sub={{ $json.sub }}&limit=25",
         "method": "GET",
-        "options": {
-          "continueOnFail": true,
-          "proxy": "${MBP_PROXY}"
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "User-Agent", "value": "news-aggregator/0.1 by wenren" }
-          ]
-        }
+        "options": {}
       },
       "id": "22222222-2222-2222-2222-222222222223",
       "name": "Fetch Sub",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [650, 300]
+      "position": [650, 300],
+      "notes": "依赖同主机本地 next start 服务（infra/launchd/com.news.web.plist），监听 ${WEB_PORT}。该路由在 web/app/api/reddit/hot/route.ts，做缓存 + UA 改写后回源 reddit。Cloudflare 上同名路由也存在但本节点走机内回环，不出公网。若停掉本地 launchd web，请同步把此 URL 改为 ${N8N_WEBHOOK_BASE%/n8n}/api/reddit/hot 或 https://news.wenmsg.fun/api/reddit/hot。",
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
-        "jsCode": "const out = [];\nfor (const it of $input.all()) {\n  const children = it.json?.data?.children || [];\n  for (const c of children) {\n    const d = c.data; if (!d) continue;\n    out.push({ json: {\n      source: 'reddit',\n      source_id: d.id,\n      title: d.title,\n      body: d.selftext || null,\n      post_url: `https://www.reddit.com${d.permalink}`,\n      link_url: d.is_self ? null : d.url,\n      author: d.author || null,\n      sub_or_handle: 'r/' + d.subreddit,\n      score: d.ups || 0,\n      comment_count: d.num_comments || 0,\n      published_at: new Date((d.created_utc || 0) * 1000).toISOString(),\n      is_ai_relevant: true\n    }});\n  }\n}\nreturn out;"
+        "jsCode": "const out = [];\n\n// Fetch Sub 调用本机 web 内部接口；接口返回 Reddit listing JSON。\nconst readListing = (json) => {\n  if (json?.data?.children) return json;\n  if (typeof json?.data === 'string') return JSON.parse(json.data);\n  if (typeof json?.body === 'string') return JSON.parse(json.body);\n  return null;\n};\n\nfor (const it of $input.all()) {\n  let listing;\n  try {\n    listing = readListing(it.json);\n  } catch (error) {\n    continue;\n  }\n\n  // 只处理 Reddit listing 结构；失败响应和空响应都跳过，不影响其它 subreddit。\n  const children = listing?.data?.children || [];\n  for (const child of children) {\n    const data = child?.data;\n    if (!data?.id || !data?.title) continue;\n\n    out.push({ json: {\n      source: 'reddit',\n      source_id: data.id,\n      title: data.title,\n      body: data.selftext || null,\n      post_url: `https://www.reddit.com${data.permalink || ''}`,\n      link_url: data.is_self ? null : data.url,\n      author: data.author || null,\n      sub_or_handle: data.subreddit ? 'r/' + data.subreddit : null,\n      score: data.ups || 0,\n      comment_count: data.num_comments || 0,\n      published_at: new Date((data.created_utc || 0) * 1000).toISOString(),\n      is_ai_relevant: true\n    }});\n  }\n}\nreturn out;"
       },
       "id": "22222222-2222-2222-2222-222222222224",
       "name": "Normalize",
@@ -65,5 +61,6 @@
   },
   "settings": { "callerPolicy": "workflowsFromSameOwner" },
   "staticData": null,
-  "tags": []
+  "tags": [],
+  "active": true
 }
