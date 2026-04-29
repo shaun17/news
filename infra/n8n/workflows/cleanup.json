@@ -5,7 +5,7 @@
     {
       "parameters": {
         "rule": {
-          "triggers": [{ "cron": "0 4 * * *" }]
+          "interval": [{ "field": "cronExpression", "expression": "0 0 4 * * *" }]
         }
       },
       "id": "0d0e1f2a-3b4c-5678-9012-abcdef000001",

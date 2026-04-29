@@ -6,7 +6,12 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 [ -f "$PROJECT_DIR/.env" ] || { echo "missing .env (copy from .env.example)" >&2; exit 1; }
 set -a; source "$PROJECT_DIR/.env"; set +a
 : "${REMOTE_USER:?}"; : "${REMOTE_HOST:?}"; : "${REMOTE_DIR:?}"; : "${WEB_PORT:?}"
-: "${MOONSHOT_API_KEY:?}"; : "${MOONSHOT_API_URL:?}"; : "${MOONSHOT_MODEL:?}"
+AI_API_KEY="${AI_API_KEY:-${MOONSHOT_API_KEY:-}}"
+AI_API_URL="${AI_API_URL:-${MOONSHOT_API_URL:-https://api.deepseek.com/chat/completions}}"
+AI_MODEL="${AI_MODEL:-${MOONSHOT_MODEL:-deepseek-v4-flash}}"
+AI_THINKING="${AI_THINKING:-disabled}"
+N8N_SECURE_COOKIE="${N8N_SECURE_COOKIE:-false}"
+: "${AI_API_KEY:?}"; : "${AI_API_URL:?}"; : "${AI_MODEL:?}"
 : "${NEWS_API_SECRET:?}"
 
 echo "=== Step 1: rsync project to remote ==="
@@ -35,7 +40,8 @@ mkdir -p "$TMP/credentials"
 mkdir -p "$TMP/workflows"
 
 # 只替换项目级占位符，保留 n8n 表达式里的 $json / $input 等运行时变量。
-N8N_ENV_SUBST='${MBP_PROXY} ${WEB_PORT} ${NEWS_API_SECRET} ${MOONSHOT_API_KEY} ${MOONSHOT_API_URL} ${MOONSHOT_MODEL} ${PGHOST} ${PGPORT} ${PGDATABASE} ${PGUSER} ${PGPASSWORD} ${PGSSL}'
+export AI_API_KEY AI_API_URL AI_MODEL AI_THINKING
+N8N_ENV_SUBST='${MBP_PROXY} ${WEB_PORT} ${NEWS_API_SECRET} ${AI_API_KEY} ${AI_API_URL} ${AI_MODEL} ${AI_THINKING} ${MOONSHOT_API_KEY} ${MOONSHOT_API_URL} ${MOONSHOT_MODEL} ${PGHOST} ${PGPORT} ${PGDATABASE} ${PGUSER} ${PGPASSWORD} ${PGSSL}'
 for f in "$PROJECT_DIR"/infra/n8n/credentials/*.json; do
   envsubst "$N8N_ENV_SUBST" < "$f" > "$TMP/credentials/$(basename "$f")"
 done
@@ -125,7 +131,8 @@ echo "=== Step 5: Deploy launchd plists (renders templates from .env) ==="
 bash "$SCRIPT_DIR/deploy-launchd.sh"
 
 echo "=== Step 6: Restart n8n (loads published workflows) ==="
-ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" 'bash -s' <<'REMOTE'
+N8N_SECURE_COOKIE_SHELL=$(printf '%q' "$N8N_SECURE_COOKIE")
+ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "N8N_SECURE_COOKIE=$N8N_SECURE_COOKIE_SHELL bash -s" <<'REMOTE'
 set -euo pipefail
 export PATH="$HOME/.nvm/versions/node/v22.22.2/bin:$PATH"
 N8N_BIN="$HOME/.nvm/versions/node/v22.22.2/bin/n8n"
@@ -138,13 +145,14 @@ if [ -n "${pids:-}" ]; then
 fi
 
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  if ! /usr/bin/nc -z 127.0.0.1 5679 >/dev/null 2>&1; then
+  if ! /usr/bin/nc -z 127.0.0.1 5678 >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
 
-nohup "$N8N_BIN" start > "$N8N_LOG" 2>&1 &
+# 通过 Tailscale HTTP 访问 n8n UI 时，secure cookie 必须关闭；改成 HTTPS 后可在 .env 中切回 true。
+N8N_SECURE_COOKIE="${N8N_SECURE_COOKIE:-false}" nohup "$N8N_BIN" start > "$N8N_LOG" 2>&1 &
 
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   if /usr/bin/nc -z 127.0.0.1 5678 >/dev/null 2>&1; then

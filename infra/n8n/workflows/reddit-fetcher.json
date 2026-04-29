@@ -31,7 +31,6 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [650, 300],
-      "notes": "依赖同主机本地 next start 服务（infra/launchd/com.news.web.plist），监听 ${WEB_PORT}。该路由在 web/app/api/reddit/hot/route.ts，做缓存 + UA 改写后回源 reddit。Cloudflare 上同名路由也存在但本节点走机内回环，不出公网。若停掉本地 launchd web，请同步把此 URL 改为 ${N8N_WEBHOOK_BASE%/n8n}/api/reddit/hot 或 https://news.wenmsg.fun/api/reddit/hot。",
       "continueOnFail": true,
       "retryOnFail": true,
       "maxTries": 3,

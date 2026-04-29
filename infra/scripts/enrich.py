@@ -3,18 +3,25 @@
 
 Idempotent. Designed to be re-run by launchd. Pulls items where
 is_ai_relevant IS NULL OR (is_ai_relevant=true AND entities IS NULL),
-calls Kimi to classify+extract, clusters into topics, refreshes hot/rising flags.
+calls an OpenAI-compatible LLM to classify+extract, clusters into topics, refreshes hot/rising flags.
 
-Reads MOONSHOT_API_KEY from env. Uses kimi-k2-0905-preview.
+Reads AI_API_KEY from env, with MOONSHOT_API_KEY kept as a compatibility fallback.
 """
 import os, sys, json, re, time, urllib.request, urllib.error
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import psycopg
 
-API_KEY = os.environ["MOONSHOT_API_KEY"]
-API_URL = os.environ.get("MOONSHOT_API_URL", "https://api.moonshot.cn/v1/chat/completions")
-MODEL   = os.environ.get("MOONSHOT_MODEL", "kimi-k2-0905-preview")
+API_KEY = os.environ.get("AI_API_KEY") or os.environ["MOONSHOT_API_KEY"]
+API_URL = os.environ.get("AI_API_URL") or os.environ.get("MOONSHOT_API_URL", "https://api.deepseek.com/chat/completions")
+MODEL   = os.environ.get("AI_MODEL") or os.environ.get("MOONSHOT_MODEL", "deepseek-v4-flash")
+AI_THINKING = os.environ.get("AI_THINKING") or ("disabled" if "deepseek.com" in API_URL else "")
+BROAD_ENTITY_KEYS = {
+    "ai", "ml", "llm", "llms", "model", "models", "agent", "agents",
+    "openai", "anthropic", "google", "googledeepmind", "deepmind",
+    "microsoft", "meta", "amazon", "aws", "xai", "deepseek", "qwen",
+    "claude", "chatgpt", "codex", "gemini", "kimi",
+}
 
 def pg_config():
     """从环境变量读取 Postgres 连接参数，避免在源码里写死部署账号和主机。"""
@@ -37,6 +44,8 @@ def kimi(messages, response_format=None, max_tokens=2000, retries=2):
     payload = {"model": MODEL, "messages": messages, "max_tokens": max_tokens, "temperature": 0.2}
     if response_format:
         payload["response_format"] = response_format
+    if AI_THINKING:
+        payload["thinking"] = {"type": AI_THINKING}
     body = json.dumps(payload).encode()
     last_err = None
     for attempt in range(retries+1):
@@ -45,7 +54,10 @@ def kimi(messages, response_format=None, max_tokens=2000, retries=2):
                   headers={"Authorization": f"Bearer {API_KEY}", "Content-Type":"application/json"})
             with urllib.request.urlopen(req, timeout=60) as resp:
                 data = json.loads(resp.read())
-                return data["choices"][0]["message"]["content"]
+                content = data["choices"][0]["message"].get("content")
+                if not content:
+                    raise ValueError("empty model content")
+                return content
         except Exception as e:
             last_err = e
             if attempt < retries:
@@ -140,9 +152,17 @@ def cluster_key(entities):
                 keys.add(n)
     return keys
 
+def has_strong_topic_overlap(item_keys, topic_keys):
+    """只允许具体实体重叠触发候选 topic，避免 OpenAI/LLM 这类宽泛词误合并。"""
+    overlap = item_keys & topic_keys
+    if not overlap:
+        return False
+    specific_overlap = {key for key in overlap if key not in BROAD_ENTITY_KEYS}
+    return bool(specific_overlap) or len(overlap) >= 2
+
 def assign_topics(con, items):
     """For each AI-relevant item with entities, find or create a topic and link.
-    Returns count of new topics created and links written."""
+    Returns count of new topics, links, and metadata refreshes."""
     cur = con.cursor()
     # load existing active topics
     cur.execute("SELECT id, name, key_entities FROM topics WHERE archived_at IS NULL")
@@ -158,6 +178,8 @@ def assign_topics(con, items):
 
     new_topics = 0
     links = 0
+    metadata_updates = 0
+    touched_topics = defaultdict(list)
     pending = []  # items that didn't match any topic, candidates for new topics
 
     for it in items:
@@ -168,12 +190,14 @@ def assign_topics(con, items):
         best = None; best_overlap = 0
         for t in topics:
             ov = len(ekey & t[2])
-            if ov >= 1 and ov > best_overlap:
+            if has_strong_topic_overlap(ekey, t[2]) and ov > best_overlap:
                 best, best_overlap = t, ov
         if best:
             cur.execute("INSERT INTO item_topics(item_id,topic_id) VALUES(%s,%s) ON CONFLICT DO NOTHING",
                         (it["id"], best[0]))
-            if cur.rowcount: links += 1
+            if cur.rowcount:
+                links += 1
+                touched_topics[best[0]].append(it)
             cur.execute("UPDATE topics SET last_active_at=NOW() WHERE id=%s", (best[0],))
         else:
             pending.append((it, ekey))
@@ -188,7 +212,7 @@ def assign_topics(con, items):
             if p is (seed_it, seed_keys): continue
             it2, k2 = p
             if it2["id"] == seed_it["id"]: continue
-            if len(seed_keys & k2) >= 1:
+            if has_strong_topic_overlap(seed_keys, k2):
                 cluster.append(p)
             else:
                 rest.append(p)
@@ -226,8 +250,101 @@ def assign_topics(con, items):
         # safety: avoid infinite loop on degenerate input
         if not cluster or len(cluster) < 2:
             break
+    metadata_updates = refresh_existing_topic_metadata(con, touched_topics)
     con.commit()
-    return new_topics, links
+    return new_topics, links, metadata_updates
+
+def normalize_topic_name(value):
+    """把模型返回的主题名收口成短标题，避免长句进入侧边栏。"""
+    return re.sub(r"\s+", " ", str(value or "")).strip()[:40]
+
+def normalize_topic_summary(value):
+    """把模型返回的摘要收口成可展示文本，避免空白和过长内容污染数据库。"""
+    return re.sub(r"\s+", " ", str(value or "")).strip()[:800]
+
+def load_recent_topic_items(cur, topic_id):
+    """读取 topic 最近真实绑定的文章，作为重新核实摘要的事实依据。"""
+    cur.execute("""
+      SELECT i.id, i.source, i.title, i.body, i.score, i.published_at
+        FROM item_topics it
+        JOIN items i ON i.id = it.item_id
+       WHERE it.topic_id = %s
+         AND i.is_ai_relevant IS NOT FALSE
+         AND i.published_at > NOW() - INTERVAL '7 days'
+       ORDER BY i.published_at DESC
+       LIMIT 8
+    """, (topic_id,))
+    cols = [c.name for c in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+def refresh_existing_topic_metadata(con, touched_topics):
+    """对被新文章触达的旧 topic 重新生成名称和摘要，修掉过期事件描述。"""
+    if not touched_topics:
+        return 0
+
+    cur = con.cursor()
+    updates = 0
+    # 控制每轮模型调用数量，避免一次积压导致 enrichment 超时。
+    topic_ids = sorted(touched_topics, key=lambda tid: len(touched_topics[tid]), reverse=True)[:12]
+    for topic_id in topic_ids:
+        cur.execute("""
+          SELECT name, summary
+            FROM topics
+           WHERE id = %s AND archived_at IS NULL
+        """, (topic_id,))
+        row = cur.fetchone()
+        if not row:
+            continue
+
+        recent_items = load_recent_topic_items(cur, topic_id)
+        if not recent_items:
+            continue
+
+        topic_meta = refresh_topic_metadata_with_kimi(row[0], row[1], recent_items)
+        if not topic_meta:
+            continue
+
+        name = normalize_topic_name(topic_meta.get("name")) or row[0]
+        summary = normalize_topic_summary(topic_meta.get("summary"))
+        if not summary:
+            continue
+
+        cur.execute("""
+          UPDATE topics
+             SET name = %s,
+                 summary = %s
+           WHERE id = %s AND archived_at IS NULL
+        """, (name, summary, topic_id))
+        updates += cur.rowcount
+    return updates
+
+def refresh_topic_metadata_with_kimi(current_name, current_summary, recent_items):
+    """让 Kimi 基于近期绑定文章核实旧 topic 元数据，而不是沿用创建时摘要。"""
+    listing = "\n".join(
+        f"[{i+1}] [{it['source']}] {it['title']}"
+        + (f"\n    {(it.get('body') or '')[:240]}" if it.get("body") else "")
+        for i, it in enumerate(recent_items)
+    )
+    prompt = (
+        "以下是一个 AI topic 当前绑定的近期文章。请核实旧主题名和摘要是否仍然准确，并返回更新后的元数据。\n"
+        "要求：\n"
+        "1. name 是稳定主题名，优先使用模型/产品/公司/议题名；不要把灰度、内测、刚上线、传闻等可能变化的状态固化进名称。\n"
+        "2. summary 用 1-2 句中文说明这些近期文章能证实的当前状态；不要沿用旧摘要里的过期状态。\n"
+        "3. 如果文章只能证明状态已变化，就写变化后的当前状态，不要把过去状态说成现在状态。\n"
+        "返回严格 JSON：{\"name\":\"...\",\"summary\":\"...\"}\n\n"
+        f"旧主题名：{current_name}\n"
+        f"旧摘要：{current_summary or ''}\n\n"
+        f"近期文章：\n{listing}"
+    )
+    try:
+        out = kimi([{"role":"user","content":prompt}],
+                   response_format={"type":"json_object"}, max_tokens=500)
+        data = extract_json(out)
+        if isinstance(data, dict):
+            return data
+    except Exception as e:
+        print(f"[topic-refresh] failed: {e}", file=sys.stderr)
+    return None
 
 def name_topic(items):
     """Ask Kimi for {name, summary, key_entities} given items in cluster."""
@@ -238,8 +355,8 @@ def name_topic(items):
     )
     prompt = (
         "以下是关于同一 AI 话题的内容。请：\n"
-        "1. 给一个简短中文主题名（≤10 字，名词性，准确具体如 \"GPT-5 发布\"）\n"
-        "2. 写 2-3 句中文摘要（核心事件 + 各方观点要点）\n"
+        "1. 给一个简短中文主题名（≤10 字，名词性，优先模型/产品/公司/议题；不要把灰度、内测、刚上线、传闻等可能变化的状态固化进名称）\n"
+        "2. 写 1-2 句中文摘要，只描述这些内容能证实的当前状态，不要把过去状态说成现在状态\n"
         "3. 列 3-5 个核心实体（模型/产品/公司/人）\n"
         "返回严格 JSON：{\"name\":\"...\",\"summary\":\"...\",\"key_entities\":[\"...\"]}\n\n"
         f"内容列表：\n{listing}"
@@ -350,8 +467,8 @@ def main():
         cols2 = [c.name for c in cur.description]
         unassigned = [dict(zip(cols2, r)) for r in cur.fetchall()]
         print(f"[cluster] {len(unassigned)} items unassigned")
-        new_topics, links = assign_topics(con, unassigned)
-        print(f"[cluster] +{new_topics} topics, +{links} links")
+        new_topics, links, metadata_updates = assign_topics(con, unassigned)
+        print(f"[cluster] +{new_topics} topics, +{links} links, +{metadata_updates} metadata refreshes")
 
         # Step 4: refresh hot/rising flags + counts
         refresh_topic_stats(con)
