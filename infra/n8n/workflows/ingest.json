@@ -9,7 +9,7 @@
         }
       },
       "id": "4d4e5f6a-7b8c-9012-3456-789abcdef001",
-      "name": "Cron 30min",
+      "name": "Hourly Ingest",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
       "position": [250, 300]
@@ -141,7 +141,7 @@
     }
   ],
   "connections": {
-    "Cron 30min": {
+    "Hourly Ingest": {
       "main": [
         [
           { "node": "Fetch HN", "type": "main", "index": 0 },
