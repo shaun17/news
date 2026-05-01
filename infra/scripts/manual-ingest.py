@@ -2,14 +2,14 @@
 """One-shot ingestion: HN + Reddit + X → items table.
 
 Mirrors n8n `ingest` workflow. Intended as a manual kick-off when n8n scheduler
-hasn't fired yet. Uses PROXY env var for HN/Reddit upstream (same as RSSHub PROXY_URI).
+hasn't fired yet. PROXY/MBP_PROXY is optional and only used for sources that need it.
 """
 import json, os, sys, urllib.request, urllib.error, socket, ssl
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import psycopg
 
-PROXY = os.environ["PROXY"]
+PROXY = os.environ.get("PROXY") or os.environ.get("MBP_PROXY")
 RSSHUB = os.environ.get("RSSHUB", "http://127.0.0.1:1200")
 UA = "news-aggregator/0.1 by wenren"
 
@@ -27,21 +27,37 @@ def pg_config():
         if value
     }
 
-def fetch(url, use_proxy=True, timeout=20):
+def fetch(url, use_proxy=True, timeout=20, fallback_direct=True):
+    """请求上游接口；代理失败时自动直连兜底，避免单个代理故障中断导入。"""
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    handlers = []
-    if use_proxy:
-        handlers.append(urllib.request.ProxyHandler({"http": PROXY, "https": PROXY}))
-    opener = urllib.request.build_opener(*handlers)
-    with opener.open(req, timeout=timeout) as resp:
-        return resp.read()
+
+    def open_with(proxy_url):
+        """按指定代理打开请求；proxy_url 为空时就是直连。"""
+        handlers = []
+        if proxy_url:
+            handlers.append(urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url}))
+        opener = urllib.request.build_opener(*handlers)
+        with opener.open(req, timeout=timeout) as resp:
+            return resp.read()
+
+    if use_proxy and PROXY:
+        try:
+            return open_with(PROXY)
+        except Exception as e:
+            if not fallback_direct:
+                raise
+            print(f"[fetch] proxy failed, retrying direct: {url} ({e})", file=sys.stderr)
+
+    return open_with(None)
 
 def fetch_hn():
-    ids = json.loads(fetch("https://hacker-news.firebaseio.com/v0/topstories.json"))[:30]
+    """直连抓取 HN top stories；HN Firebase 在远端可访问，不再依赖 MBP 代理。"""
+    ids = json.loads(fetch("https://hacker-news.firebaseio.com/v0/topstories.json", use_proxy=False))[:30]
     out = []
     def one(i):
+        """抓取单条 HN item；单条失败只跳过该条，不影响整批。"""
         try:
-            return json.loads(fetch(f"https://hacker-news.firebaseio.com/v0/item/{i}.json"))
+            return json.loads(fetch(f"https://hacker-news.firebaseio.com/v0/item/{i}.json", use_proxy=False))
         except Exception as e:
             return None
     with ThreadPoolExecutor(max_workers=8) as ex:
@@ -63,6 +79,7 @@ def fetch_hn():
     return out
 
 def fetch_reddit():
+    """抓取 Reddit 热帖；代理不可用时自动直连尝试。"""
     subs = ["LocalLLaMA","MachineLearning","singularity","OpenAI","ClaudeAI","StableDiffusion"]
     out = []
     for s in subs:
@@ -89,6 +106,7 @@ def fetch_reddit():
     return out
 
 def fetch_x():
+    """通过本机 RSSHub 抓取 X 用户 feed；RSSHub 已经负责 Twitter 侧鉴权。"""
     import re
     from xml.etree import ElementTree as ET
     handles = ["sama","AnthropicAI","demishassabis","ylecun","karpathy","AndrewYNg",
@@ -133,6 +151,7 @@ def fetch_x():
     return out
 
 def upsert(rows):
+    """批量写入 items；已存在的来源内容只刷新分数、评论数和抓取时间。"""
     if not rows: return 0
     sql = """
     INSERT INTO items
@@ -151,14 +170,23 @@ def upsert(rows):
         con.commit()
     return len(rows)
 
+def collect_source(label, fetcher):
+    """单个来源失败时返回空列表，保证手动补救仍能写入其它来源。"""
+    print(f"[{label}] fetching...", flush=True)
+    try:
+        rows = fetcher()
+    except Exception as e:
+        print(f"[{label}] failed: {e}", file=sys.stderr)
+        return []
+    print(f"[{label}] {len(rows)} items")
+    return rows
+
 def main():
+    """依次抓取三个来源并写入数据库；任何单源失败都不会中断整轮补救。"""
     all_rows = []
-    print("[hn] fetching...", flush=True)
-    hn = fetch_hn(); print(f"[hn] {len(hn)} items"); all_rows += hn
-    print("[reddit] fetching...", flush=True)
-    r = fetch_reddit(); print(f"[reddit] {len(r)} items"); all_rows += r
-    print("[x] fetching...", flush=True)
-    x = fetch_x(); print(f"[x] {len(x)} items"); all_rows += x
+    all_rows += collect_source("hn", fetch_hn)
+    all_rows += collect_source("reddit", fetch_reddit)
+    all_rows += collect_source("x", fetch_x)
     n = upsert(all_rows)
     print(f"[done] upserted {n} rows")
 

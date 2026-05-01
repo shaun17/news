@@ -31,7 +31,8 @@
       "name": "Fetch HN",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [450, 150]
+      "position": [450, 150],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -42,7 +43,8 @@
       "name": "Fetch Reddit",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [450, 300]
+      "position": [450, 300],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -53,7 +55,8 @@
       "name": "Fetch X",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [450, 450]
+      "position": [450, 450],
+      "continueOnFail": true
     },
     {
       "parameters": {
