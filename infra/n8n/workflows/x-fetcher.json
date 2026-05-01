@@ -12,7 +12,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const handles = [\n  'sama','AnthropicAI','demishassabis','ylecun',\n  'karpathy','AndrewYNg','_jasonwei','giffmana',\n  'swyx','simonw','jxnlco','abacaj',\n  'trq212','noahzweben',\n  'OpenAI','claudeai','GeminiApp','deepseek_ai','Kimi_Moonshot',\n  'ClaudeDevs','OpenAIDevs'\n];\nreturn handles.map(h => ({ json: { handle: h } }));"
+        "jsCode": "const rawHandles = [\n  'sama','AnthropicAI','demishassabis','ylecun',\n  'karpathy','AndrewYNg','_jasonwei','giffmana',\n  'swyx','simonw','jxnlco','abacaj',\n  'trq212','noahzweben',\n  'OpenAI','claudeai','GeminiApp','deepseek_ai','Kimi_Moonshot',\n  'ClaudeDevs','OpenAIDevs',\n  '_akhaliq','papers_daily','fchollet','geoffreyhinton',\n  'drfeifei','kaifulee','AravSrinivas','GaryMarcus',\n  'jeremyphoward','rowancheung','alliekmiller'\n];\nconst seen = new Set();\n\n// X handle 大小写不敏感，这里保留首次出现的写法并跳过重复项。\nconst handles = rawHandles.filter((handle) => {\n  const key = handle.toLowerCase();\n  if (seen.has(key)) return false;\n  seen.add(key);\n  return true;\n});\nreturn handles.map(h => ({ json: { handle: h } }));"
       },
       "id": "33333333-3333-3333-3333-333333333332",
       "name": "List Handles",

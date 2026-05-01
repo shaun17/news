@@ -109,8 +109,27 @@ def fetch_x():
     """通过本机 RSSHub 抓取 X 用户 feed；RSSHub 已经负责 Twitter 侧鉴权。"""
     import re
     from xml.etree import ElementTree as ET
-    handles = ["sama","AnthropicAI","demishassabis","ylecun","karpathy","AndrewYNg",
-               "_jasonwei","giffmana","swyx","simonw","jxnlco","abacaj"]
+    raw_handles = [
+        "sama", "AnthropicAI", "demishassabis", "ylecun",
+        "karpathy", "AndrewYNg", "_jasonwei", "giffmana",
+        "swyx", "simonw", "jxnlco", "abacaj",
+        "trq212", "noahzweben",
+        "OpenAI", "claudeai", "GeminiApp", "deepseek_ai", "Kimi_Moonshot",
+        "ClaudeDevs", "OpenAIDevs",
+        "_akhaliq", "papers_daily", "fchollet", "geoffreyhinton",
+        "drfeifei", "kaifulee", "AravSrinivas", "GaryMarcus",
+        "jeremyphoward", "rowancheung", "alliekmiller",
+    ]
+    seen_handles = set()
+
+    # X handle 大小写不敏感，保留首次出现的写法并跳过重复项。
+    handles = []
+    for handle in raw_handles:
+        key = handle.lower()
+        if key in seen_handles:
+            continue
+        seen_handles.add(key)
+        handles.append(handle)
     cutoff = datetime.now(timezone.utc).timestamp() - 72*3600
     out = []
     for h in handles:
