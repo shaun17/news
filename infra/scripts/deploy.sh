@@ -5,14 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 [ -f "$PROJECT_DIR/.env" ] || { echo "missing .env (copy from .env.example)" >&2; exit 1; }
 set -a; source "$PROJECT_DIR/.env"; set +a
-: "${REMOTE_USER:?}"; : "${REMOTE_HOST:?}"; : "${REMOTE_DIR:?}"; : "${WEB_PORT:?}"
+: "${REMOTE_USER:?}"; : "${REMOTE_HOST:?}"; : "${REMOTE_DIR:?}"; : "${WEB_PORT:?}"; : "${QUERY_SERVICE_PORT:?}"
 AI_API_KEY="${AI_API_KEY:-${MOONSHOT_API_KEY:-}}"
 AI_API_URL="${AI_API_URL:-${MOONSHOT_API_URL:-https://api.deepseek.com/chat/completions}}"
 AI_MODEL="${AI_MODEL:-${MOONSHOT_MODEL:-deepseek-v4-flash}}"
 AI_THINKING="${AI_THINKING:-disabled}"
 N8N_SECURE_COOKIE="${N8N_SECURE_COOKIE:-false}"
 : "${AI_API_KEY:?}"; : "${AI_API_URL:?}"; : "${AI_MODEL:?}"
-: "${NEWS_API_SECRET:?}"
+: "${NEWS_API_SECRET:?}"; : "${QUERY_API_BASE:?}"
 
 echo "=== Step 1: rsync project to remote ==="
 ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "mkdir -p $REMOTE_DIR"
@@ -34,7 +34,10 @@ echo "=== Step 3: Build web frontend ==="
 # next/font 在 build 时会从 Google Fonts 拉字体；远程机出网必须走 MBP 代理。
 bash "$SCRIPT_DIR/ssh.sh" "cd $REMOTE_DIR/web && HTTPS_PROXY='$MBP_PROXY' HTTP_PROXY='$MBP_PROXY' npm install --legacy-peer-deps && HTTPS_PROXY='$MBP_PROXY' HTTP_PROXY='$MBP_PROXY' npm run build"
 
-echo "=== Step 4: Render + import n8n credentials and workflows (envsubst from .env) ==="
+echo "=== Step 4: Install query service ==="
+bash "$SCRIPT_DIR/ssh.sh" "cd $REMOTE_DIR/query-service && npm install --omit=dev"
+
+echo "=== Step 5: Render + import n8n credentials and workflows (envsubst from .env) ==="
 TMP=$(mktemp -d); trap "rm -rf $TMP" EXIT
 mkdir -p "$TMP/credentials"
 mkdir -p "$TMP/workflows"
@@ -127,10 +130,10 @@ for (const file of fs.readdirSync('/tmp/news-credentials')) {
 NODE
 REMOTE
 
-echo "=== Step 5: Deploy launchd plists (renders templates from .env) ==="
+echo "=== Step 6: Deploy launchd plists (renders templates from .env) ==="
 bash "$SCRIPT_DIR/deploy-launchd.sh"
 
-echo "=== Step 6: Restart n8n (loads published workflows) ==="
+echo "=== Step 7: Restart n8n (loads published workflows) ==="
 N8N_SECURE_COOKIE_SHELL=$(printf '%q' "$N8N_SECURE_COOKIE")
 ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" "N8N_SECURE_COOKIE=$N8N_SECURE_COOKIE_SHELL bash -s" <<'REMOTE'
 set -euo pipefail
@@ -166,5 +169,8 @@ echo "  ! n8n did not open port 5678" >&2
 tail -80 "$N8N_LOG" >&2 || true
 exit 1
 REMOTE
+
+echo "=== Step 8: Deploy query service tunnel ==="
+bash "$SCRIPT_DIR/deploy-query-tunnel.sh"
 
 echo "=== Done! Open http://${REMOTE_HOST}:${WEB_PORT} ==="

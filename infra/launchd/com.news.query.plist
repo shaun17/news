@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.news.query</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>${REMOTE_DIR}/query-service/src/server.js</string>
+  </array>
+  <key>WorkingDirectory</key><string>${REMOTE_DIR}/query-service</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key><string>production</string>
+    <key>QUERY_SERVICE_PORT</key><string>${QUERY_SERVICE_PORT}</string>
+    <key>NEWS_API_SECRET</key><string>${NEWS_API_SECRET}</string>
+    <key>PGHOST</key><string>${PGHOST}</string>
+    <key>PGPORT</key><string>${PGPORT}</string>
+    <key>PGDATABASE</key><string>${PGDATABASE}</string>
+    <key>PGUSER</key><string>${PGUSER}</string>
+    <key>PGPASSWORD</key><string>${PGPASSWORD}</string>
+    <key>PGSSL</key><string>${PGSSL}</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>${REMOTE_USER_HOME}/Library/Logs/news-query.log</string>
+  <key>StandardErrorPath</key><string>${REMOTE_USER_HOME}/Library/Logs/news-query.log</string>
+</dict>
+</plist>

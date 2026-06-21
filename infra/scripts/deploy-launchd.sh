@@ -9,7 +9,7 @@ set -a; source "$PROJECT_DIR/.env"; set +a
 : "${REMOTE_USER:?}"; : "${REMOTE_HOST:?}"
 
 # 这些变量只覆盖 web + rsshub 的 plist；采集和增强任务由 n8n 工作流接管。
-required=(REMOTE_USER_HOME REMOTE_DIR MBP_PROXY RSSHUB_PORT WEB_PORT N8N_WEBHOOK_BASE NEWS_API_SECRET
+required=(REMOTE_USER_HOME REMOTE_DIR MBP_PROXY RSSHUB_PORT WEB_PORT QUERY_SERVICE_PORT N8N_WEBHOOK_BASE QUERY_API_BASE NEWS_API_SECRET
           TWITTER_AUTH_TOKEN)
 for v in "${required[@]}"; do
   if [ -z "${!v:-}" ]; then echo "  ! \$$v is empty in .env" >&2; exit 1; fi
@@ -18,8 +18,8 @@ done
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-# launchd 只保留前端和 RSSHub，避免下次部署重新拉起 Python 采集/增强脚本。
-launchd_labels=(com.news.web com.news.rsshub)
+# launchd 只保留前端、查询服务和 RSSHub，避免下次部署重新拉起 Python 采集/增强脚本。
+launchd_labels=(com.news.web com.news.query com.news.rsshub)
 for label in "${launchd_labels[@]}"; do
   src="$PROJECT_DIR/infra/launchd/$label.plist"
   [ -f "$src" ] || { echo "missing launchd template: $src" >&2; exit 1; }
@@ -55,7 +55,7 @@ ssh -o BatchMode=yes "$REMOTE_USER@$REMOTE_HOST" 'set -e
     echo "  removed: $label"
   done
 
-  for label in com.news.web com.news.rsshub; do
+  for label in com.news.web com.news.query com.news.rsshub; do
     p=~/Library/LaunchAgents/"$label".plist
     launchctl bootout gui/$UID/"$label" 2>/dev/null || true
     bootstrap_label "$label" "$p"

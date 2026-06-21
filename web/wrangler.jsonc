@@ -22,7 +22,8 @@
     { "pattern": "news.wenmsg.fun", "custom_domain": true }
   ],
   "vars": {
-    "N8N_WEBHOOK_BASE": "https://n8n-api.wenmsg.fun"
+    "N8N_WEBHOOK_BASE": "https://n8n-api.wenmsg.fun",
+    "QUERY_API_BASE": "https://news-query.wenmsg.fun"
   },
   "secrets": {
     "required": [
